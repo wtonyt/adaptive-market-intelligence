@@ -30,4 +30,11 @@ def test_run_success():
 
 def test_run_unauthorized():
     r = requests.post(f"{BASE_URL}/run")
+    assert r.status_code == 401
+
+def test_run_invalid_token():
+    r = requests.post(
+        f"{BASE_URL}/run",
+        headers={"Authorization": "Bearer invalidtoken"}
+    )
     assert r.status_code == 403

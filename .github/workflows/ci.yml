@@ -46,3 +46,29 @@ jobs:
         python src/features/bronze.py
         python src/features/silver.py
         python src/features/gold.py
+
+    # -----------------------------
+    # DOCKER SECTION (fixed)
+    # -----------------------------
+    - name: Build API Docker image
+      run: |
+        docker build -t market-ml-api -f docker/Dockerfile.api .
+
+    - name: Run API container
+      run: |
+        docker run -d -p 8000:8000 \
+          -e API_KEY=${{ secrets.API_KEY }} \
+          --name test-api \
+          market-ml-api
+
+    - name: Wait for API (container)
+      run: sleep 10
+
+    - name: Test API (inside container)
+      run: |
+        curl -f http://127.0.0.1:8000/ || exit 1
+        curl -X POST http://127.0.0.1:8000/run \
+          -H "x-api-key: ${{ secrets.API_KEY }}" || exit 1
+
+    - name: Stop container
+      run: docker stop test-api

@@ -9,6 +9,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      API_KEY: ${{ secrets.API_KEY }}
+
     steps:
     - name: Checkout repo
       uses: actions/checkout@v3
@@ -24,7 +27,20 @@ jobs:
         source .venv/bin/activate
         pip install -r requirements.txt
 
-    - name: Run pipeline
+    - name: Start API
+      run: |
+        source .venv/bin/activate
+        nohup uvicorn src.api.main:app --host 127.0.0.1 --port 8000 &
+
+    - name: Wait for API
+      run: sleep 5
+
+    - name: Run API tests
+      run: |
+        source .venv/bin/activate
+        pytest src/tests/test_api.py
+
+    - name: Run pipeline tests
       run: |
         source .venv/bin/activate
         python src/features/bronze.py

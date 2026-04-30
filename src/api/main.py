@@ -1,24 +1,55 @@
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from src.workflows.run_pipeline import run_pipeline
+from jose import jwt, JWTError
 import os
 from dotenv import load_dotenv
 
+# -----------------------------
+# Load environment
+# -----------------------------
 load_dotenv()
 
 app = FastAPI()
 
-API_KEY = os.getenv("API_KEY")
+# -----------------------------
+# Security setup (JWT)
+# -----------------------------
+security = HTTPBearer()
+
+SECRET_KEY = os.getenv("JWT_SECRET", "myjwtsecret")  # dev fallback
+ALGORITHM = "HS256"
 
 
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except JWTError:
+        raise HTTPException(status_code=403, detail="Invalid token")
+
+
+# -----------------------------
+# Health check
+# -----------------------------
 @app.get("/")
 def health():
     return {"status": "running"}
 
 
+# -----------------------------
+# Secure pipeline trigger
+# -----------------------------
 @app.post("/run")
-def trigger_pipeline(x_api_key: str = Header(None)):
-    if x_api_key != API_KEY:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+def trigger_pipeline(
+    background_tasks: BackgroundTasks,
+    user=Depends(verify_token)
+):
+    background_tasks.add_task(run_pipeline)
 
-    result = run_pipeline()
-    return result
+    return {
+        "status": "pipeline started",
+        "user": user
+    }

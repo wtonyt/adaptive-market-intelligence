@@ -3,7 +3,14 @@ import glob
 import os
 
 def load_raw_data():
+    import glob
+    import pandas as pd
+
     files = glob.glob("data/raw/*/*.csv")
+
+    if not files:
+        raise ValueError("No raw data files found. Did ingestion run?")
+
     dfs = []
 
     for file in files:

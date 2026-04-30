@@ -43,6 +43,7 @@ jobs:
     - name: Run pipeline tests
       run: |
         source .venv/bin/activate
+        python src/ingestion/market_data.py
         python src/features/bronze.py
         python src/features/silver.py
         python src/features/gold.py

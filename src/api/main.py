@@ -30,6 +30,7 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
 
     # CI / test bypass
     if TEST_MODE:
+        print("TEST_MODE ACTIVE", flush=True)
         return {"roles": ["admin"]}
 
     token = credentials.credentials
@@ -71,6 +72,7 @@ def health():
 
 @app.post("/run")
 def trigger_pipeline(background_tasks: BackgroundTasks, user=Depends(verify_token)):
+    print(f"USER PAYLOAD: {user}", flush=True)
     roles = user.get("roles", [])
     
     if "admin" not in roles:

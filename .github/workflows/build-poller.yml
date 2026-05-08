@@ -26,11 +26,9 @@ jobs:
           pip install -r requirements.txt
 
       - name: Start API
-        env:
-          TEST_MODE: true
         run: |
           source .venv/bin/activate
-          uvicorn src.api.main:app --host 127.0.0.1 --port 8000 &
+          TEST_MODE=true uvicorn src.api.main:app --host 127.0.0.1 --port 8000 &
 
       - name: Wait for API
         run: |

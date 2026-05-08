@@ -10,7 +10,10 @@ ALGORITHM = "HS256"
 
 def get_token(role="admin"):
     return jwt.encode(
-        {"user": "ci-test", "role": role},
+        {
+            "user": "ci-test",
+            "roles": [role]
+        },
         SECRET_KEY,
         algorithm=ALGORITHM
     )

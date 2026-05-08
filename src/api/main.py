@@ -1,55 +1,76 @@
+# src/api/main.py
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from src.workflows.run_pipeline import run_pipeline
 from jose import jwt, JWTError
-import os
+import requests, os
 from dotenv import load_dotenv
 
-# -----------------------------
-# Load environment
-# -----------------------------
 load_dotenv()
-
 app = FastAPI()
-
-# -----------------------------
-# Security setup (JWT)
-# -----------------------------
 security = HTTPBearer()
 
-SECRET_KEY = os.getenv("JWT_SECRET", "myjwtsecret")  # dev fallback
-ALGORITHM = "HS256"
+TENANT_ID = os.getenv("AZURE_TENANT_ID")
+AUDIENCE = os.getenv("AZURE_AUDIENCE")
 
+OPENID_CONFIG = f"https://login.microsoftonline.com/{TENANT_ID}/v2.0/.well-known/openid-configuration"
+
+# --- cache keys (avoid fetching on every request) ---
+_jwks = None
+
+def get_jwks():
+    global _jwks
+    if _jwks is None:
+        config = requests.get(OPENID_CONFIG).json()
+        jwks_uri = config["jwks_uri"]
+        _jwks = requests.get(jwks_uri).json()
+    return _jwks
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        jwks = get_jwks()
+        headers = jwt.get_unverified_header(token)
+
+        key = next(k for k in jwks["keys"] if k["kid"] == headers["kid"])
+
+        # Decode WITHOUT issuer validation first
+        payload = jwt.decode(
+            token,
+            key,
+            algorithms=["RS256"],
+            audience=AUDIENCE,
+            options={"verify_iss": False}
+        )
+
+        # Now validate issuer manually (more flexible)
+        issuer = payload.get("iss")
+
+        valid_issuers = [
+            f"https://login.microsoftonline.com/{TENANT_ID}/v2.0",
+            f"https://sts.windows.net/{TENANT_ID}/"
+        ]
+
+        if issuer not in valid_issuers:
+            raise HTTPException(status_code=403, detail="Invalid issuer")
+
         return payload
-    except JWTError:
-        raise HTTPException(status_code=403, detail="Invalid token")
 
-
-# -----------------------------
-# Health check
-# -----------------------------
+    except Exception as e:
+        raise HTTPException(status_code=403, detail=f"Invalid Azure token: {str(e)}")
+    
 @app.get("/")
 def health():
     return {"status": "running"}
 
-
-# -----------------------------
-# Secure pipeline trigger
-# -----------------------------
 @app.post("/run")
-def trigger_pipeline(
-    background_tasks: BackgroundTasks,
-    user=Depends(verify_token)
-):
+def trigger_pipeline(background_tasks: BackgroundTasks, user=Depends(verify_token)):
+    roles = user.get("roles", [])
+    
+    if "admin" not in roles:
+        raise HTTPException(status_code=403, detail="Admin role required")
+
+    from src.workflows.run_pipeline import run_pipeline
     background_tasks.add_task(run_pipeline)
 
-    return {
-        "status": "pipeline started",
-        "user": user
-    }
+    return {"status": "pipeline started"}

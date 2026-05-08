@@ -1,14 +1,23 @@
-# Terraform
-infra/.terraform/
-.terraform/
-*.tfstate
-*.tfstate.*
-.terraform.lock.hcl
-
 # Python
 .venv/
 __pycache__/
-*.pyc
+.pytest_cache/
 
-# Environment
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+
+# Terraform lock files
+# Keep env-level lock files only if desired
+infra/.terraform.lock.hcl
+
+# Mac
+.DS_Store
+
+# VSCode
+.vscode/
+
 .env

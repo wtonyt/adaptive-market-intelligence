@@ -9,6 +9,7 @@ load_dotenv()
 app = FastAPI()
 security = HTTPBearer()
 
+TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
 TENANT_ID = os.getenv("AZURE_TENANT_ID")
 AUDIENCE = os.getenv("AZURE_AUDIENCE")
 
@@ -26,6 +27,11 @@ def get_jwks():
     return _jwks
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+
+    # CI / test bypass
+    if TEST_MODE:
+        return {"roles": ["admin"]}
+
     token = credentials.credentials
 
     try:

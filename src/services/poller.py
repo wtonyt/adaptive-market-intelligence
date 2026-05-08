@@ -60,8 +60,9 @@ def poll():
             output = {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "signal": signal,
-                "action": action
-            }
+                "action": action,
+                "position": current_position
+                        }
 
             # ✅ Console log
             print(output, flush=True)

@@ -3,7 +3,7 @@ variable "location" {
 }
 
 variable "resource_group_name" {
-  default = "market-ml-rg"
+  default = "market-ml-dev-rg"
 }
 
 variable "container_app_name" {

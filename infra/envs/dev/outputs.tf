@@ -1,3 +1,7 @@
 output "api_url" {
-  value = azurerm_container_app.api.latest_revision_fqdn
+  value = module.api_service.fqdn
+}
+
+output "poller_container_app_id" {
+  value = module.poller_service.container_app_id
 }

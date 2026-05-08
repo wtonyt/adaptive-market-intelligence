@@ -12,6 +12,7 @@ security = HTTPBearer()
 TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
 TENANT_ID = os.getenv("AZURE_TENANT_ID")
 AUDIENCE = os.getenv("AZURE_AUDIENCE")
+SECRET_KEY = os.getenv("JWT_SECRET", "myjwtsecret")
 
 OPENID_CONFIG = f"https://login.microsoftonline.com/{TENANT_ID}/v2.0/.well-known/openid-configuration"
 
@@ -30,10 +31,24 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
 
     # CI / test bypass
     if TEST_MODE:
-        print("TEST_MODE ACTIVE", flush=True)
-        return {"roles": ["admin"]}
 
-    token = credentials.credentials
+        token = credentials.credentials
+
+        # Simulate invalid token
+        if token == "invalidtoken":
+            raise HTTPException(status_code=403, detail="Invalid token")
+
+        try:
+            payload = jwt.decode(
+                token,
+                SECRET_KEY,
+                algorithms=["HS256"]
+            )
+
+            return payload
+
+        except Exception:
+            raise HTTPException(status_code=403, detail="Invalid token")
 
     try:
         jwks = get_jwks()

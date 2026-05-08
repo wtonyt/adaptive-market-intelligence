@@ -1,19 +1,14 @@
+# Terraform
+infra/.terraform/
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
 # Python
+.venv/
 __pycache__/
 *.pyc
-.venv/
 
-# Env
+# Environment
 .env
-
-# Data
-data/
-
-# Mac
-.DS_Store
-
-# Logs
-*.log
-
-# Docker
-*.pid

@@ -1,4 +1,7 @@
-name: Build and Push Poller Image
+name: Build and Deploy Poller Service
+
+env:
+  IMAGE_TAG: ${{ github.sha }}
 
 on:
   push:
@@ -12,6 +15,7 @@ concurrency:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout code
@@ -24,6 +28,7 @@ jobs:
 
       - name: Install dependencies
         run: |
+          set -e
           python -m venv .venv
           source .venv/bin/activate
           pip install --upgrade pip
@@ -31,20 +36,31 @@ jobs:
 
       - name: Start API
         run: |
+          set -e
           source .venv/bin/activate
-          TEST_MODE=true uvicorn src.api.main:app --host 127.0.0.1 --port 8000 &
+          TEST_MODE=true uvicorn src.api.main:app \
+            --host 127.0.0.1 \
+            --port 8000 &
 
       - name: Wait for API
         run: |
           for i in {1..10}; do
-            curl http://127.0.0.1:8000/ && break
+            if curl -f http://127.0.0.1:8000/; then
+              exit 0
+            fi
+
+            echo "Waiting for API..."
             sleep 2
           done
+
+          echo "API failed to start"
+          exit 1
 
       - name: Run tests
         env:
           TEST_MODE: true
         run: |
+          set -e
           source .venv/bin/activate
           pytest
 
@@ -54,14 +70,35 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Log in to ACR
-        run: az acr login --name marketmlacr123
+        run: |
+          set -e
+          az acr login --name marketmlacr123
 
       - name: Build Docker image
         run: |
+          set -e
           docker build \
-            -t marketmlacr123.azurecr.io/poller-service:latest \
+            -t marketmlacr123.azurecr.io/poller-service:${{ env.IMAGE_TAG }} \
             -f docker/Dockerfile.poller .
 
       - name: Push Docker image
         run: |
-          docker push marketmlacr123.azurecr.io/poller-service:latest
+          set -e
+          docker push \
+            marketmlacr123.azurecr.io/poller-service:${{ env.IMAGE_TAG }}
+
+      - name: Deploy Poller Container App
+        run: |
+          set -e
+          az containerapp update \
+            --name poller-service \
+            --resource-group market-ml-rg \
+            --image marketmlacr123.azurecr.io/poller-service:${{ env.IMAGE_TAG }}
+
+      - name: Verify Deployment
+        run: |
+          set -e
+          az containerapp revision list \
+            --name poller-service \
+            --resource-group market-ml-rg \
+            --output table

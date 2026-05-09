@@ -30,6 +30,15 @@ resource "azurerm_container_app_environment" "env" {
   resource_group_name = azurerm_resource_group.rg.name
 }
 
+module "service_bus" {
+  source = "../../modules/service-bus"
+
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = var.location
+
+  namespace_name = "marketmldevbus"
+  queue_name     = "signals"
+}
 # -----------------------------------
 # API Service
 # -----------------------------------

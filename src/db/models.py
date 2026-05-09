@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Float, DateTime
 from datetime import datetime, timezone
-
+from sqlalchemy import Boolean
 from src.db.database import Base
 
 
@@ -41,3 +41,37 @@ class MarketCandle(Base):
     close = Column(Float)
 
     volume = Column(Float)
+
+class ConsensusEvent(Base):
+
+    __tablename__ = "consensus_events"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
+
+    symbol = Column(
+        String,
+        index=True
+    )
+
+    ml_side = Column(String)
+
+    rl_side = Column(String)
+
+    consensus = Column(Boolean)
+
+    consensus_score = Column(Float)
+
+    final_side = Column(String)
+
+    confidence_score = Column(Float)
+
+    reason = Column(String)
+
+    timestamp = Column(
+        DateTime,
+        index=True
+    )

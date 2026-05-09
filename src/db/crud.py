@@ -1,7 +1,7 @@
 from src.db.database import SessionLocal
 from src.db.models import SignalEvent
 from datetime import datetime, timezone
-
+from src.db.models import ConsensusEvent
 from src.db.models import MarketCandle
 
 
@@ -82,6 +82,55 @@ def save_market_candles(
 
         print(
             f"Inserted {inserted} candles",
+            flush=True
+        )
+
+    finally:
+        db.close()
+
+def save_consensus_event(
+    consensus_signal
+):
+
+    db = SessionLocal()
+
+    try:
+
+        row = ConsensusEvent(
+
+            symbol=consensus_signal.symbol,
+
+            ml_side=consensus_signal.ml_side,
+
+            rl_side=consensus_signal.rl_side,
+
+            consensus=consensus_signal.consensus,
+
+            consensus_score=(
+                consensus_signal.consensus_score
+            ),
+
+            final_side=(
+                consensus_signal.final_side
+            ),
+
+            confidence_score=(
+                consensus_signal.confidence_score
+            ),
+
+            reason=consensus_signal.reason,
+
+            timestamp=(
+                consensus_signal.timestamp
+            )
+        )
+
+        db.add(row)
+
+        db.commit()
+
+        print(
+            "Consensus event saved",
             flush=True
         )
 

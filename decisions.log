@@ -55,3 +55,17 @@
 {"timestamp": "2026-05-09T04:34:45.200603+00:00", "signal": {"ticker": "AAPL", "signal": "SELL", "confidence": 0.67}, "action": "NO_ACTION", "position": "LONG"}
 {"timestamp": "2026-05-09T04:34:56.650471+00:00", "signal": {"ticker": "AAPL", "signal": "BUY", "confidence": 0.72}, "action": "NO_ACTION", "position": "LONG"}
 {"timestamp": "2026-05-09T04:35:08.043480+00:00", "signal": {"ticker": "AAPL", "signal": "HOLD", "confidence": 0.6}, "action": "NO_ACTION", "position": "LONG"}
+{"timestamp": "2026-05-09T04:40:53.142227+00:00", "signal": {"ticker": "AAPL", "signal": "SELL", "confidence": 0.54}, "action": "NO_ACTION", "position": null}
+{"timestamp": "2026-05-09T04:41:04.521391+00:00", "signal": {"ticker": "AAPL", "signal": "HOLD", "confidence": 0.57}, "action": "NO_ACTION", "position": null}
+{"timestamp": "2026-05-09T04:41:15.814384+00:00", "signal": {"ticker": "AAPL", "signal": "HOLD", "confidence": 0.66}, "action": "NO_ACTION", "position": null}
+{"timestamp": "2026-05-09T04:41:27.140785+00:00", "signal": {"ticker": "AAPL", "signal": "SELL", "confidence": 0.69}, "action": "NO_ACTION", "position": null}
+{"timestamp": "2026-05-09T04:41:38.416340+00:00", "signal": {"ticker": "AAPL", "signal": "BUY", "confidence": 0.81}, "action": "ENTER_LONG", "position": "LONG"}
+{"timestamp": "2026-05-09T04:59:42.434319+00:00", "signal": {"ticker": "AAPL", "signal": "HOLD", "confidence": 0.91}, "action": "NO_ACTION", "position": null}
+{"timestamp": "2026-05-09T04:59:53.792263+00:00", "signal": {"ticker": "AAPL", "signal": "SELL", "confidence": 0.71}, "action": "NO_ACTION", "position": null}
+{"timestamp": "2026-05-09T05:00:05.064959+00:00", "signal": {"ticker": "AAPL", "signal": "SELL", "confidence": 0.64}, "action": "NO_ACTION", "position": null}
+{"timestamp": "2026-05-09T05:00:16.377667+00:00", "signal": {"ticker": "AAPL", "signal": "SELL", "confidence": 0.57}, "action": "NO_ACTION", "position": null}
+{"timestamp": "2026-05-09T05:00:27.700924+00:00", "signal": {"ticker": "AAPL", "signal": "SELL", "confidence": 0.51}, "action": "NO_ACTION", "position": null}
+{"timestamp": "2026-05-09T05:00:38.963949+00:00", "signal": {"ticker": "AAPL", "signal": "BUY", "confidence": 0.55}, "action": "NO_ACTION", "position": null}
+{"timestamp": "2026-05-09T05:00:50.411073+00:00", "signal": {"ticker": "AAPL", "signal": "SELL", "confidence": 0.58}, "action": "NO_ACTION", "position": null}
+{"timestamp": "2026-05-09T05:12:01.103468Z", "signal": {"ticker": "AAPL", "signal": "HOLD", "confidence": 0.85}, "action": "NO_ACTION", "position": null}
+{"timestamp": "2026-05-09T05:12:12.396151Z", "signal": {"ticker": "AAPL", "signal": "HOLD", "confidence": 0.9}, "action": "NO_ACTION", "position": null}

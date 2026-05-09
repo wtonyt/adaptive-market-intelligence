@@ -2,7 +2,7 @@ import time
 import random
 from datetime import datetime, timezone
 import json
-
+from src.schemas.events import SignalEvent
 from src.services.service_bus import publish_signal
 
 print("Poller script loaded", flush=True)
@@ -60,12 +60,14 @@ def poll():
             signal = get_mock_signal()
             action = decide(signal)
 
-            output = {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "signal": signal,
-                "action": action,
-                "position": current_position
-            }
+            event = SignalEvent(
+                timestamp=datetime.now(timezone.utc),
+                signal=signal,
+                action=action,
+                position=current_position
+            )
+
+            output = event.model_dump(mode="json")
 
             # Console log
             print(output, flush=True)

@@ -93,7 +93,7 @@ def trigger_pipeline(background_tasks: BackgroundTasks, user=Depends(verify_toke
     if "admin" not in roles:
         raise HTTPException(status_code=403, detail="Admin role required")
 
-    from src.workflows.run_pipeline import run_pipeline
+    from src.pipelines.run_pipeline import run_pipeline
     background_tasks.add_task(run_pipeline)
 
     return {"status": "pipeline started"}

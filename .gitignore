@@ -8,6 +8,8 @@ __pycache__/
 *.tfstate
 *.tfstate.*
 *.tfplan
+*.tfvars
+*.tfvars.json
 crash.log
 
 # Terraform lock files

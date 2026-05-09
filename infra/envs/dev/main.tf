@@ -13,12 +13,9 @@ resource "azurerm_resource_group" "rg" {
 # -----------------------------------
 # Azure Container Registry
 # -----------------------------------
-resource "azurerm_container_registry" "acr" {
+data "azurerm_container_registry" "acr" {
   name                = var.acr_name
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = var.location
-  sku                 = "Basic"
-  admin_enabled       = true
+  resource_group_name = "market-ml-rg"
 }
 
 # -----------------------------------
@@ -49,9 +46,9 @@ module "api_service" {
   resource_group_name          = azurerm_resource_group.rg.name
   container_app_environment_id = azurerm_container_app_environment.env.id
 
-  acr_login_server = azurerm_container_registry.acr.login_server
-  acr_username     = azurerm_container_registry.acr.admin_username
-  acr_password     = azurerm_container_registry.acr.admin_password
+  acr_login_server = data.azurerm_container_registry.acr.login_server
+  acr_username     = data.azurerm_container_registry.acr.admin_username
+  acr_password     = data.azurerm_container_registry.acr.admin_password
 
   image_name = "market-ml-api"
   image_tag  = "latest"
@@ -78,9 +75,9 @@ module "poller_service" {
   resource_group_name          = azurerm_resource_group.rg.name
   container_app_environment_id = azurerm_container_app_environment.env.id
 
-  acr_login_server = azurerm_container_registry.acr.login_server
-  acr_username     = azurerm_container_registry.acr.admin_username
-  acr_password     = azurerm_container_registry.acr.admin_password
+  acr_login_server = data.azurerm_container_registry.acr.login_server
+  acr_username     = data.azurerm_container_registry.acr.admin_username
+  acr_password     = data.azurerm_container_registry.acr.admin_password
 
   image_name = "poller-service"
   image_tag  = "latest"

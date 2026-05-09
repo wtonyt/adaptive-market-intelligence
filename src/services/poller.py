@@ -3,10 +3,13 @@ import random
 from datetime import datetime, timezone
 import json
 
+from src.services.service_bus import publish_signal
+
 print("Poller script loaded", flush=True)
 
 current_position = None  # None or "LONG"
 entry_price = None
+
 
 # -----------------------------
 # Mock Signal Generator
@@ -62,14 +65,17 @@ def poll():
                 "signal": signal,
                 "action": action,
                 "position": current_position
-                        }
+            }
 
-            # ✅ Console log
+            # Console log
             print(output, flush=True)
 
-            # ✅ NEW: Save to file
+            # Save to local file
             with open("decisions.log", "a") as f:
                 f.write(json.dumps(output) + "\n")
+
+            # Publish to Azure Service Bus
+            publish_signal(output)
 
         except Exception as e:
             print({

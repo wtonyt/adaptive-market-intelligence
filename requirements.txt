@@ -7,7 +7,7 @@ azure-servicebus==7.14.3
 beautifulsoup4==4.14.3
 blinker==1.9.0
 cachetools==6.2.6
-certifi==2026.4.22
+certifi==2025.11.12
 cffi==2.0.0
 charset-normalizer==3.4.7
 click==8.1.8
@@ -57,6 +57,7 @@ peewee==4.0.5
 pillow==11.3.0
 platformdirs==4.4.0
 pluggy==1.6.0
+polygon-api-client==1.16.3
 protobuf==6.33.6
 psycopg2-binary==2.9.12
 py4j==0.10.9.9

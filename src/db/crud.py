@@ -1,5 +1,8 @@
 from src.db.database import SessionLocal
 from src.db.models import SignalEvent
+from datetime import datetime, timezone
+
+from src.db.models import MarketCandle
 
 
 def save_signal_event(data: dict):
@@ -23,6 +26,64 @@ def save_signal_event(data: dict):
         db.commit()
 
         print("Saved event to PostgreSQL", flush=True)
+
+    finally:
+        db.close()
+
+def save_market_candles(
+    ticker: str,
+    candles: list
+):
+
+    db = SessionLocal()
+
+    try:
+
+        inserted = 0
+
+        for candle in candles:
+
+            existing = (
+                db.query(MarketCandle)
+                .filter(
+                    MarketCandle.ticker == ticker,
+                    MarketCandle.timestamp == datetime.fromtimestamp(
+                        candle["timestamp"] / 1000,
+                        tz=timezone.utc
+                    )
+                )
+                .first()
+            )
+
+            if existing:
+                continue
+
+            row = MarketCandle(
+                ticker=ticker,
+
+                timestamp=datetime.fromtimestamp(
+                    candle["timestamp"] / 1000,
+                    tz=timezone.utc
+                ),
+
+                open=candle["open"],
+                high=candle["high"],
+                low=candle["low"],
+                close=candle["close"],
+
+                volume=candle["volume"]
+            )
+
+            db.add(row)
+
+            inserted += 1
+
+        db.commit()
+
+        print(
+            f"Inserted {inserted} candles",
+            flush=True
+        )
 
     finally:
         db.close()

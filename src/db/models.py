@@ -24,3 +24,20 @@ class SignalEvent(Base):
         DateTime,
         default=lambda: datetime.now(timezone.utc)
     )
+
+class MarketCandle(Base):
+
+    __tablename__ = "market_candles"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    ticker = Column(String, index=True)
+
+    timestamp = Column(DateTime, index=True)
+
+    open = Column(Float)
+    high = Column(Float)
+    low = Column(Float)
+    close = Column(Float)
+
+    volume = Column(Float)

@@ -1,14 +1,18 @@
 from src.db.database import SessionLocal
 from src.db.models import SignalEvent, MarketCandle
 from src.db.crud import save_agent_performance
+from src.services.position_sizing_engine import (
+    calculate_position_size
+)
+
+from src.services.market_regime_engine import (
+    detect_market_regime
+)
 
 STARTING_CAPITAL = 10000
 
 COMMISSION_PER_TRADE = 1.00
 SLIPPAGE_BPS = 5
-
-POSITION_SIZE_PERCENT = 0.10
-
 
 def apply_slippage(price, side):
 
@@ -60,6 +64,13 @@ def run_backtest():
 
         capital = STARTING_CAPITAL
 
+        regime = detect_market_regime()
+
+        print(
+            f"Backtest Regime: {regime}",
+            flush=True
+        )
+
         current_position = None
 
         entry_price = None
@@ -110,15 +121,41 @@ def run_backtest():
                         "BUY"
                     )
 
-                    position_size = (
-                        capital * POSITION_SIZE_PERCENT
+                    confidence_score = 0.80
+
+                    position_percent = (
+                        calculate_position_size(
+                            confidence_score,
+                            regime
+                        )
                     )
+
+                    position_size = (
+                        capital * position_percent
+                    )
+                    if position_size <= 0:
+
+                        print(
+                            "Skipping trade due to zero position size",
+                            flush=True
+                        )
+
+                        continue
 
                     shares = (
                         position_size / entry_price
                     )
 
-                    capital -= COMMISSION_PER_TRADE
+                    print(
+                        f"Position %={round(position_percent, 4)} | "
+                        f"Position Size=${round(position_size, 2)}",
+                        flush=True
+                    )
+                    
+                    capital -= (
+                        position_size +
+                        COMMISSION_PER_TRADE
+                    )
 
                     total_entries += 1
 
@@ -158,7 +195,9 @@ def run_backtest():
                         exit_price - entry_price
                     ) * shares
 
-                    capital += pnl
+                    capital += (
+                        shares * exit_price
+                    )
                     
                     actual_outcome = (
                         "BUY"

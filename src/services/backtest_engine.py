@@ -8,6 +8,9 @@ from src.services.position_sizing_engine import (
 from src.services.market_regime_engine import (
     detect_market_regime
 )
+from src.services.trade_management_engine import (
+    should_exit_trade
+)
 
 STARTING_CAPITAL = 10000
 
@@ -75,7 +78,7 @@ def run_backtest():
 
         entry_price = None
         shares = None
-
+        bars_held = 0
         total_entries = 0
         closed_trades = 0
 
@@ -105,6 +108,10 @@ def run_backtest():
                 continue
 
             action = event.action
+
+            if current_position == "LONG":
+
+                bars_held += 1
 
             # -----------------------------------
             # ENTER LONG
@@ -158,6 +165,8 @@ def run_backtest():
                     )
 
                     total_entries += 1
+                    bars_held = 0
+                    continue
 
                     print(
                         f"\nENTER LONG @ "
@@ -179,10 +188,18 @@ def run_backtest():
             # -----------------------------------
             # EXIT LONG
             # -----------------------------------
+            
+            if current_position == "LONG":
 
-            elif action == "EXIT_LONG":
+                should_exit, exit_reason = (
+                    should_exit_trade(
+                        entry_price,
+                        current_price,
+                        bars_held
+                    )
+                )
 
-                if current_position == "LONG":
+                if should_exit:
 
                     exit_price = apply_slippage(
                         current_price,
@@ -198,48 +215,7 @@ def run_backtest():
                     capital += (
                         shares * exit_price
                     )
-                    
-                    actual_outcome = (
-                        "BUY"
-                        if pnl > 0
-                        else "SELL"
-                    )
 
-                    was_correct = pnl > 0
-
-                    # ML performance
-                    save_agent_performance(
-                        agent_name="ML",
-
-                        symbol="AAPL",
-
-                        prediction_side="BUY",
-
-                        actual_outcome=actual_outcome,
-
-                        confidence=0.82,
-
-                        pnl=pnl,
-
-                        was_correct=was_correct
-                    )
-
-                    # RL performance
-                    save_agent_performance(
-                        agent_name="RL",
-
-                        symbol="AAPL",
-
-                        prediction_side="BUY",
-
-                        actual_outcome=actual_outcome,
-
-                        confidence=0.78,
-
-                        pnl=pnl,
-
-                        was_correct=was_correct
-                    )
                     closed_trades += 1
 
                     if pnl >= 0:
@@ -254,19 +230,55 @@ def run_backtest():
                     )
 
                     print(
-                        f"PnL: {round(pnl, 2)}",
+                        f"Exit Reason: "
+                        f"{exit_reason}",
                         flush=True
                     )
 
                     print(
-                        f"Capital: {round(capital, 2)}",
+                        f"PnL: "
+                        f"{round(pnl, 2)}",
                         flush=True
                     )
 
-                    current_position = None
+                    print(
+                        f"Capital: "
+                        f"{round(capital, 2)}",
+                        flush=True
+                    )
 
+                    actual_outcome = (
+                        "BUY"
+                        if pnl > 0
+                        else "SELL"
+                    )
+
+                    was_correct = pnl > 0
+
+                    save_agent_performance(
+                        agent_name="ML",
+                        symbol="AAPL",
+                        prediction_side="BUY",
+                        actual_outcome=actual_outcome,
+                        confidence=0.82,
+                        pnl=pnl,
+                        was_correct=was_correct
+                    )
+
+                    save_agent_performance(
+                        agent_name="RL",
+                        symbol="AAPL",
+                        prediction_side="BUY",
+                        actual_outcome=actual_outcome,
+                        confidence=0.78,
+                        pnl=pnl,
+                        was_correct=was_correct
+                    )
+
+                    current_position = None
                     entry_price = None
                     shares = None
+                    bars_held = 0
 
         # -----------------------------------
         # RESULTS

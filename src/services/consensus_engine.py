@@ -1,3 +1,4 @@
+import random
 from datetime import datetime, timezone
 from src.db.crud import save_consensus_event
 from src.schemas.signals import (
@@ -6,6 +7,9 @@ from src.schemas.signals import (
 )
 from src.services.agent_weight_engine import (
     calculate_dynamic_weights
+)
+from src.services.market_regime_engine import (
+    detect_market_regime
 )
 
 LIQUIDITY_WEIGHT = 0.20
@@ -19,18 +23,12 @@ def mock_ml_signal():
 
     return TraderSignal(
         source="ML",
-
         symbol="AAPL",
-
-        side="BUY",
-
-        confidence=0.82,
-
+        side=random.choice(["BUY", "SELL", "HOLD"]),
+        confidence=round(random.uniform(0.55, 0.95), 2),
         timestamp=datetime.now(timezone.utc),
-
-        liquidity_score=0.90,
-
-        timing_score=0.75
+        liquidity_score=round(random.uniform(0.60, 0.95), 2),
+        timing_score=round(random.uniform(0.55, 0.95), 2)
     )
 
 
@@ -42,20 +40,13 @@ def mock_rl_signal():
 
     return TraderSignal(
         source="RL",
-
         symbol="AAPL",
-
-        side="BUY",
-
-        confidence=0.78,
-
+        side=random.choice(["BUY", "SELL", "HOLD"]),
+        confidence=round(random.uniform(0.55, 0.95), 2),
         timestamp=datetime.now(timezone.utc),
-
-        liquidity_score=0.88,
-
-        timing_score=0.80
+        liquidity_score=round(random.uniform(0.60, 0.95), 2),
+        timing_score=round(random.uniform(0.55, 0.95), 2)
     )
-
 
 # -----------------------------------
 # Consensus Logic
@@ -67,7 +58,7 @@ def build_consensus(
 ):
 
     weights = calculate_dynamic_weights()
-
+    regime = detect_market_regime()
     ml_weight = weights.get(
         "ML",
         0.5
@@ -77,6 +68,31 @@ def build_consensus(
         "RL",
         0.5
     )
+
+# -----------------------------------
+# Regime-Based Adjustments
+# -----------------------------------
+
+    if regime == "TRENDING":
+
+        ml_weight *= 1.20
+
+        rl_weight *= 0.80
+
+    elif regime == "VOLATILE":
+
+        ml_weight *= 0.80
+
+        rl_weight *= 1.20
+
+    total_weight = (
+        ml_weight + rl_weight
+    )
+
+    ml_weight /= total_weight
+
+    rl_weight /= total_weight
+
     consensus = (
         ml_signal.side == rl_signal.side
     )
@@ -106,9 +122,9 @@ def build_consensus(
     )
 
     confidence_score = (
-        weighted_agent_confidence
+        (weighted_agent_confidence * 0.70)
         +
-        market_context_score
+        (market_context_score * 0.30)
     )
 
     confidence_score = min(
@@ -120,8 +136,8 @@ def build_consensus(
         confidence_score *= 0.50    
 
     print(
-        f"Dynamic Weights → "
-        f"ML={round(ml_weight, 4)} "
+        f"Regime={regime} | "
+        f"ML={round(ml_weight, 4)} | "
         f"RL={round(rl_weight, 4)}",
         flush=True
     )
@@ -153,6 +169,14 @@ def build_consensus(
         reason = (
             "Low-confidence or disagreement"
         )
+
+    print(
+        f"ML={ml_signal.side}/{ml_signal.confidence} | "
+        f"RL={rl_signal.side}/{rl_signal.confidence} | "
+        f"Consensus={consensus} | "
+        f"Confidence={round(confidence_score, 4)}",
+        flush=True
+    )
 
     return ConsensusSignal(
 

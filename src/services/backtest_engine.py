@@ -11,6 +11,9 @@ from src.services.market_regime_engine import (
 from src.services.trade_management_engine import (
     should_exit_trade
 )
+from src.models.portfolio_state import (
+    PortfolioState
+)
 
 STARTING_CAPITAL = 10000
 
@@ -65,7 +68,7 @@ def run_backtest():
             .all()
         )
 
-        capital = STARTING_CAPITAL
+        portfolio = PortfolioState()
 
         regime = detect_market_regime()
 
@@ -138,7 +141,7 @@ def run_backtest():
                     )
 
                     position_size = (
-                        capital * position_percent
+                        portfolio.cash_balance * position_percent
                     )
                     if position_size <= 0:
 
@@ -159,14 +162,19 @@ def run_backtest():
                         flush=True
                     )
                     
-                    capital -= (
-                        position_size +
+                    portfolio.add_position(
+                        symbol="AAPL",
+                        shares=shares,
+                        entry_price=entry_price,
+                        position_value=position_size
+                    )
+
+                    portfolio.cash_balance -= (
                         COMMISSION_PER_TRADE
                     )
 
                     total_entries += 1
                     bars_held = 0
-                    continue
 
                     print(
                         f"\nENTER LONG @ "
@@ -181,9 +189,11 @@ def run_backtest():
 
                     print(
                         f"Capital After Commission: "
-                        f"{round(capital, 2)}",
+                        f"{round(portfolio.cash_balance, 2)}",
                         flush=True
                     )
+
+                    continue
 
             # -----------------------------------
             # EXIT LONG
@@ -206,14 +216,22 @@ def run_backtest():
                         "SELL"
                     )
 
-                    capital -= COMMISSION_PER_TRADE
-
                     pnl = (
                         exit_price - entry_price
                     ) * shares
 
-                    capital += (
+                    exit_value = (
                         shares * exit_price
+                    )
+
+                    portfolio.remove_position(
+                        symbol="AAPL",
+                        exit_value=exit_value,
+                        pnl=pnl
+                    )
+
+                    portfolio.cash_balance -= (
+                        COMMISSION_PER_TRADE
                     )
 
                     closed_trades += 1
@@ -243,7 +261,7 @@ def run_backtest():
 
                     print(
                         f"Capital: "
-                        f"{round(capital, 2)}",
+                        f"{round(portfolio.cash_balance, 2)}",
                         flush=True
                     )
 
@@ -294,7 +312,7 @@ def run_backtest():
 
         print(
             f"Ending Capital: "
-            f"{round(capital, 2)}",
+            f"{round(portfolio.cash_balance, 2)}",
             flush=True
         )
 
@@ -329,6 +347,16 @@ def run_backtest():
                 f"{round(win_rate, 2)}%",
                 flush=True
             )
+            
+            print(
+                "\n===== PORTFOLIO SUMMARY =====",
+                flush=True
+            )
+
+            print(
+                portfolio.summary(),
+                flush=True
+            )
 
         if current_position == "LONG":
 
@@ -342,7 +370,7 @@ def run_backtest():
                 f"Entry Price: "
                 f"{round(entry_price, 2)}",
                 flush=True
-            )
+            )            
 
     finally:
         db.close()

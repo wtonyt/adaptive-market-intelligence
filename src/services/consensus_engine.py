@@ -5,6 +5,11 @@ from src.schemas.signals import (
     ConsensusSignal
 )
 
+ML_WEIGHT = 0.60
+RL_WEIGHT = 0.40
+
+LIQUIDITY_WEIGHT = 0.20
+TIMING_WEIGHT = 0.20
 
 # -----------------------------------
 # Mock ML Signal
@@ -65,11 +70,6 @@ def build_consensus(
         ml_signal.side == rl_signal.side
     )
 
-    avg_confidence = (
-        ml_signal.confidence
-        + rl_signal.confidence
-    ) / 2
-
     avg_liquidity = (
         (ml_signal.liquidity_score or 0)
         +
@@ -82,43 +82,26 @@ def build_consensus(
         (rl_signal.timing_score or 0)
     ) / 2
 
-    confidence_score = (
-        avg_confidence * 0.5
+    weighted_agent_confidence = (
+        (ml_signal.confidence * ML_WEIGHT)
         +
-        avg_liquidity * 0.25
-        +
-        avg_timing * 0.25
+        (rl_signal.confidence * RL_WEIGHT)
     )
 
-    # -----------------------------------
-    # Final Decision
-    # -----------------------------------
+    market_context_score = (
+        (avg_liquidity * LIQUIDITY_WEIGHT)
+        +
+        (avg_timing * TIMING_WEIGHT)
+    )
 
-    if consensus and confidence_score > 0.75:
+    confidence_score = (
+        weighted_agent_confidence
+        +
+        market_context_score
+    )
 
-        final_side = ml_signal.side
-
-        reason = (
-            "ML and RL agree with "
-            "high confidence"
-        )
-
-    elif consensus:
-
-        final_side = "HOLD"
-
-        reason = (
-            "Consensus exists but "
-            "confidence is moderate"
-        )
-
-    else:
-
-        final_side = "SKIP"
-
-        reason = (
-            "ML and RL disagree"
-        )
+    if not consensus:
+        confidence_score *= 0.50    
 
     return ConsensusSignal(
 
@@ -130,7 +113,9 @@ def build_consensus(
 
         consensus=consensus,
 
-        consensus_score=1.0 if consensus else 0.0,
+        consensus_score=(
+            1.0 if consensus else 0.0
+        ),
 
         final_side=final_side,
 
@@ -143,6 +128,34 @@ def build_consensus(
 
         timestamp=datetime.now(timezone.utc)
     )
+
+    # -----------------------------------
+    # Final Decision
+    # -----------------------------------
+
+    if consensus and confidence_score >= 0.85:
+
+        final_side = ml_signal.side
+
+        reason = (
+            "High-confidence consensus"
+        )
+
+    elif consensus and confidence_score >= 0.70:
+
+        final_side = "HOLD"
+
+        reason = (
+            "Moderate-confidence consensus"
+        )
+
+    else:
+
+        final_side = "SKIP"
+
+        reason = (
+            "Low-confidence or disagreement"
+        )
 
 
 # -----------------------------------

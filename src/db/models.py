@@ -75,3 +75,22 @@ class ConsensusEvent(Base):
         DateTime,
         index=True
     )
+
+class AgentPerformance(Base):
+
+    __tablename__ = "agent_performance"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    agent_name = Column(String, index=True)  # ML or RL
+    symbol = Column(String, index=True)
+
+    prediction_side = Column(String)
+    actual_outcome = Column(String)
+
+    confidence = Column(Float)
+    pnl = Column(Float)
+
+    was_correct = Column(Boolean)
+
+    timestamp = Column(DateTime, index=True)

@@ -32,14 +32,14 @@ def decide(signal):
 
     if current_position is None:
         # Only allow BUY if not already in a position
-        if signal["signal"] == "BUY" and signal["confidence"] > 0.7:
+        if signal["signal"] == "BUY" and signal["confidence"] > 0.55:
             action = "ENTER_LONG"
             current_position = "LONG"
             entry_price = 100  # placeholder for now
 
     elif current_position == "LONG":
         # Only allow SELL if in a position
-        if signal["signal"] == "SELL" and signal["confidence"] > 0.7:
+        if signal["signal"] == "SELL" and signal["confidence"] > 0.55:
             action = "EXIT_LONG"
             current_position = None
             entry_price = None

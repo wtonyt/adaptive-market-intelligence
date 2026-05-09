@@ -3,6 +3,8 @@ from src.db.models import SignalEvent
 from datetime import datetime, timezone
 from src.db.models import ConsensusEvent
 from src.db.models import MarketCandle
+from src.db.models import AgentPerformance
+from datetime import datetime
 
 
 def save_signal_event(data: dict):
@@ -131,6 +133,51 @@ def save_consensus_event(
 
         print(
             "Consensus event saved",
+            flush=True
+        )
+
+    finally:
+        db.close()
+
+def save_agent_performance(
+    agent_name,
+    symbol,
+    prediction_side,
+    actual_outcome,
+    confidence,
+    pnl,
+    was_correct
+):
+
+    db = SessionLocal()
+
+    try:
+
+        row = AgentPerformance(
+
+            agent_name=agent_name,
+
+            symbol=symbol,
+
+            prediction_side=prediction_side,
+
+            actual_outcome=actual_outcome,
+
+            confidence=confidence,
+
+            pnl=pnl,
+
+            was_correct=was_correct,
+
+            timestamp=datetime.utcnow()
+        )
+
+        db.add(row)
+
+        db.commit()
+
+        print(
+            f"{agent_name} performance saved",
             flush=True
         )
 

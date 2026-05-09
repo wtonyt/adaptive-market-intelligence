@@ -1,5 +1,6 @@
 from src.db.database import SessionLocal
 from src.db.models import SignalEvent, MarketCandle
+from src.db.crud import save_agent_performance
 
 STARTING_CAPITAL = 10000
 
@@ -158,7 +159,48 @@ def run_backtest():
                     ) * shares
 
                     capital += pnl
+                    
+                    actual_outcome = (
+                        "BUY"
+                        if pnl > 0
+                        else "SELL"
+                    )
 
+                    was_correct = pnl > 0
+
+                    # ML performance
+                    save_agent_performance(
+                        agent_name="ML",
+
+                        symbol="AAPL",
+
+                        prediction_side="BUY",
+
+                        actual_outcome=actual_outcome,
+
+                        confidence=0.82,
+
+                        pnl=pnl,
+
+                        was_correct=was_correct
+                    )
+
+                    # RL performance
+                    save_agent_performance(
+                        agent_name="RL",
+
+                        symbol="AAPL",
+
+                        prediction_side="BUY",
+
+                        actual_outcome=actual_outcome,
+
+                        confidence=0.78,
+
+                        pnl=pnl,
+
+                        was_correct=was_correct
+                    )
                     closed_trades += 1
 
                     if pnl >= 0:

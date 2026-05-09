@@ -4,9 +4,9 @@ from src.schemas.signals import (
     TraderSignal,
     ConsensusSignal
 )
-
-ML_WEIGHT = 0.60
-RL_WEIGHT = 0.40
+from src.services.agent_weight_engine import (
+    calculate_dynamic_weights
+)
 
 LIQUIDITY_WEIGHT = 0.20
 TIMING_WEIGHT = 0.20
@@ -66,6 +66,17 @@ def build_consensus(
     rl_signal: TraderSignal
 ):
 
+    weights = calculate_dynamic_weights()
+
+    ml_weight = weights.get(
+        "ML",
+        0.5
+    )
+
+    rl_weight = weights.get(
+        "RL",
+        0.5
+    )
     consensus = (
         ml_signal.side == rl_signal.side
     )
@@ -83,9 +94,9 @@ def build_consensus(
     ) / 2
 
     weighted_agent_confidence = (
-        (ml_signal.confidence * ML_WEIGHT)
+        (ml_signal.confidence * ml_weight)
         +
-        (rl_signal.confidence * RL_WEIGHT)
+        (rl_signal.confidence * rl_weight)
     )
 
     market_context_score = (
@@ -100,35 +111,21 @@ def build_consensus(
         market_context_score
     )
 
+    confidence_score = min(
+        confidence_score,
+        1.0
+    )
+
     if not consensus:
         confidence_score *= 0.50    
 
-    return ConsensusSignal(
-
-        symbol=ml_signal.symbol,
-
-        ml_side=ml_signal.side,
-
-        rl_side=rl_signal.side,
-
-        consensus=consensus,
-
-        consensus_score=(
-            1.0 if consensus else 0.0
-        ),
-
-        final_side=final_side,
-
-        confidence_score=round(
-            confidence_score,
-            4
-        ),
-
-        reason=reason,
-
-        timestamp=datetime.now(timezone.utc)
+    print(
+        f"Dynamic Weights → "
+        f"ML={round(ml_weight, 4)} "
+        f"RL={round(rl_weight, 4)}",
+        flush=True
     )
-
+    
     # -----------------------------------
     # Final Decision
     # -----------------------------------
@@ -157,7 +154,32 @@ def build_consensus(
             "Low-confidence or disagreement"
         )
 
+    return ConsensusSignal(
 
+        symbol=ml_signal.symbol,
+
+        ml_side=ml_signal.side,
+
+        rl_side=rl_signal.side,
+
+        consensus=consensus,
+
+        consensus_score=(
+            1.0 if consensus else 0.0
+        ),
+
+        final_side=final_side,
+
+        confidence_score=round(
+            confidence_score,
+            4
+        ),
+
+        reason=reason,
+
+        timestamp=datetime.now(timezone.utc)
+    )
+    
 # -----------------------------------
 # Main
 # -----------------------------------

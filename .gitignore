@@ -23,3 +23,6 @@ infra/.terraform.lock.hcl
 .vscode/
 
 .env
+.env.dev
+.env.qa
+.env.prod

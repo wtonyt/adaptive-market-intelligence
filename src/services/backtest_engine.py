@@ -1,6 +1,7 @@
 from src.db.database import SessionLocal
 from src.db.models import SignalEvent, MarketCandle
 from src.db.crud import save_agent_performance
+from src.utils.logger import logger
 from src.services.position_sizing_engine import (
     calculate_position_size
 )
@@ -70,9 +71,8 @@ def run_backtest():
 
         for symbol in BACKTEST_SYMBOLS:
 
-            print(
-                f"\n===== RUNNING BACKTEST FOR {symbol} =====",
-                flush=True
+            logger.info(
+                f"Running backtest for {symbol}"
             )
 
             candles = (
@@ -89,7 +89,9 @@ def run_backtest():
 
             regime = detect_market_regime()
 
-            print(f"Backtest Regime: {regime}", flush=True)
+            logger.info(
+                f"Backtest regime detected: {regime}"
+            )
 
             total_entries = 0
             closed_trades = 0
@@ -281,7 +283,9 @@ def run_backtest():
             # RESULTS
             # -----------------------------------
 
-            print("\n===== BACKTEST RESULTS =====", flush=True)
+            logger.info(
+                "Backtest completed"
+            )
             print(f"Symbol: {symbol}", flush=True)
             print(f"Starting Capital: {STARTING_CAPITAL}", flush=True)
             print(

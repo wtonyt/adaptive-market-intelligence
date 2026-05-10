@@ -1,8 +1,14 @@
 from src.db.database import engine
 from src.db.models import Base
 
-print("Creating database tables...")
 
-Base.metadata.create_all(bind=engine)
+def init_db():
 
-print("Database initialized.")
+    Base.metadata.create_all(bind=engine)
+
+    print("Database tables created")
+
+
+if __name__ == "__main__":
+
+    init_db()

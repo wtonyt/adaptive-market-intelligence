@@ -1,7 +1,7 @@
-
 services:
 
   postgres:
+
     image: postgres:16
 
     container_name: market_ml_postgres
@@ -9,15 +9,156 @@ services:
     restart: always
 
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin123
-      POSTGRES_DB: market_ml
+
+      POSTGRES_USER: "${POSTGRES_USER:-admin}"
+
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-admin123}"
+
+      POSTGRES_DB: "${POSTGRES_DB:-market_ml_dev}"
 
     ports:
+
       - "5432:5432"
 
     volumes:
+
       - postgres_data:/var/lib/postgresql/data
 
+    healthcheck:
+
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-market_ml_dev}"
+        ]
+
+      interval: 5s
+
+      timeout: 5s
+
+      retries: 10
+
+
+  api:
+
+    build:
+
+      context: .
+
+      dockerfile: docker/Dockerfile.api
+
+    container_name: market_ml_api
+
+    restart: unless-stopped
+
+    depends_on:
+
+      postgres:
+
+        condition: service_healthy
+
+    environment:
+
+      ENVIRONMENT: "${ENVIRONMENT:-DEV}"
+
+      TEST_MODE: "true"
+
+      JWT_SECRET: "${JWT_SECRET:-myjwtsecret}"
+
+      POSTGRES_USER: "${POSTGRES_USER:-admin}"
+
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-admin123}"
+
+      POSTGRES_DB: "${POSTGRES_DB:-market_ml_dev}"
+
+      POSTGRES_HOST: postgres
+
+      POSTGRES_PORT: 5432
+
+      EVENT_INGEST_TOKEN: "${EVENT_INGEST_TOKEN:-local-openclaw-token}"
+
+      NODEASSET_DEFAULT_CONFIDENCE: "${NODEASSET_DEFAULT_CONFIDENCE:-0.82}"
+
+      NODEASSET_DEFAULT_LIQUIDITY_SCORE: "${NODEASSET_DEFAULT_LIQUIDITY_SCORE:-0.75}"
+
+      NODEASSET_DEFAULT_TIMING_SCORE: "${NODEASSET_DEFAULT_TIMING_SCORE:-0.75}"
+
+      NODEASSET_OPENCLAW_ACTION_THRESHOLD: "${NODEASSET_OPENCLAW_ACTION_THRESHOLD:-0.70}"
+
+      NODEASSET_EVENT_LOG: "${NODEASSET_EVENT_LOG:-data/nodeasset_trades.log}"
+
+      NODEASSET_REASONED_EVENT_LOG: "${NODEASSET_REASONED_EVENT_LOG:-data/nodeasset_openclaw_reasoned.log}"
+
+      NODEASSET_COPILOT_RESULT_URL: "${NODEASSET_COPILOT_RESULT_URL:-}"
+
+      NODEASSET_COPILOT_RESULT_TOKEN: "${NODEASSET_COPILOT_RESULT_TOKEN:-}"
+
+    ports:
+
+      - "8000:8000"
+
+    volumes:
+
+      - ./data:/app/data
+
+
+  poller:
+
+    build:
+
+      context: .
+
+      dockerfile: docker/Dockerfile.poller
+
+    container_name: market_ml_poller
+
+    restart: unless-stopped
+
+    depends_on:
+
+      postgres:
+
+        condition: service_healthy
+
+    environment:
+
+      ENVIRONMENT: "${ENVIRONMENT:-DEV}"
+
+      NODEASSET_API_URL: "${NODEASSET_API_URL:-https://api.nodeasset.com}"
+
+      NODEASSET_EMAIL: "${NODEASSET_EMAIL:-}"
+
+      NODEASSET_PASSWORD: "${NODEASSET_PASSWORD:-}"
+
+      NODEASSET_LOGIN_PATH: "${NODEASSET_LOGIN_PATH:-/user/login}"
+
+      NODEASSET_FEED_PATH: "${NODEASSET_FEED_PATH:-/gappers/subscribed-trades}"
+
+      NODEASSET_LIMIT: "${NODEASSET_LIMIT:-100}"
+
+      NODEASSET_POLL_SECONDS: "${NODEASSET_POLL_SECONDS:-5}"
+
+      NODEASSET_ONCE: "${NODEASSET_ONCE:-false}"
+
+      NODEASSET_CURSOR_FILE: "${NODEASSET_CURSOR_FILE:-data/nodeasset_cursor.txt}"
+
+      NODEASSET_EVENT_LOG: "${NODEASSET_EVENT_LOG:-data/nodeasset_trades.log}"
+
+      POSTGRES_USER: "${POSTGRES_USER:-admin}"
+
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-admin123}"
+
+      POSTGRES_DB: "${POSTGRES_DB:-market_ml_dev}"
+
+      POSTGRES_HOST: postgres
+
+      POSTGRES_PORT: 5432
+
+    volumes:
+
+      - ./data:/app/data
+
+
 volumes:
+
   postgres_data:

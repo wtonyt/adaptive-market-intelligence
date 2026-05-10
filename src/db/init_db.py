@@ -1,12 +1,22 @@
 from src.db.database import engine
 from src.db.models import Base
 
+from src.utils.logger import logger
+
 
 def init_db():
 
-    Base.metadata.create_all(bind=engine)
+    logger.info(
+        "Creating database tables"
+    )
 
-    print("Database tables created")
+    Base.metadata.create_all(
+        bind=engine
+    )
+
+    logger.info(
+        "Database initialization complete"
+    )
 
 
 if __name__ == "__main__":

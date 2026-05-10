@@ -1,96 +1,287 @@
-import time
-import random
-from datetime import datetime, timezone
 import json
-from src.schemas.events import SignalEvent
-from src.services.service_bus import publish_signal
+import os
+import time
 
-print("Poller script loaded", flush=True)
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-current_position = None  # None or "LONG"
-entry_price = None
+import requests
 
+from dotenv import load_dotenv
 
-# -----------------------------
-# Mock Signal Generator
-# -----------------------------
-def get_mock_signal():
-    return {
-        "ticker": "AAPL",
-        "signal": random.choice(["BUY", "SELL", "HOLD"]),
-        "confidence": round(random.uniform(0.5, 0.95), 2)
-    }
+from src.services.trade_events import (
+    append_trade_event
+)
+
+from src.utils.logger import logger
 
 
-# -----------------------------
-# Decision Engine (rules-based)
-# -----------------------------
-def decide(signal):
-    global current_position, entry_price
-
-    action = "NO_ACTION"
-
-    if current_position is None:
-        # Only allow BUY if not already in a position
-        if signal["signal"] == "BUY" and signal["confidence"] > 0.55:
-            action = "ENTER_LONG"
-            current_position = "LONG"
-            entry_price = 100  # placeholder for now
-
-    elif current_position == "LONG":
-        # Only allow SELL if in a position
-        if signal["signal"] == "SELL" and signal["confidence"] > 0.55:
-            action = "EXIT_LONG"
-            current_position = None
-            entry_price = None
-
-    return action
+load_dotenv()
 
 
-# -----------------------------
-# Main Poll Loop
-# -----------------------------
-def poll():
-    print("Poller started...", flush=True)
+NODEASSET_API_URL = os.getenv(
+    "NODEASSET_API_URL",
+    "https://api.nodeasset.com"
+).rstrip("/")
 
-    while True:
-        print("Polling...", flush=True)
+NODEASSET_LOGIN_PATH = os.getenv(
+    "NODEASSET_LOGIN_PATH",
+    "/user/login"
+)
 
-        try:
-            signal = get_mock_signal()
-            action = decide(signal)
+NODEASSET_FEED_PATH = os.getenv(
+    "NODEASSET_FEED_PATH",
+    "/gappers/subscribed-trades"
+)
 
-            event = SignalEvent(
-                timestamp=datetime.now(timezone.utc),
-                signal=signal,
-                action=action,
-                position=current_position
+NODEASSET_EMAIL = os.getenv(
+    "NODEASSET_EMAIL",
+    ""
+)
+
+NODEASSET_PASSWORD = os.getenv(
+    "NODEASSET_PASSWORD",
+    ""
+)
+
+NODEASSET_POLL_SECONDS = float(
+    os.getenv(
+        "NODEASSET_POLL_SECONDS",
+        "5"
+    )
+)
+
+NODEASSET_LIMIT = int(
+    os.getenv(
+        "NODEASSET_LIMIT",
+        "100"
+    )
+)
+
+NODEASSET_ONCE = (
+    os.getenv(
+        "NODEASSET_ONCE",
+        "false"
+    ).lower() == "true"
+)
+
+CURSOR_FILE = Path(
+    os.getenv(
+        "NODEASSET_CURSOR_FILE",
+        "data/nodeasset_cursor.txt"
+    )
+)
+
+HTTP_TIMEOUT = float(
+    os.getenv(
+        "NODEASSET_HTTP_TIMEOUT",
+        "15"
+    )
+)
+
+
+class NodeAssetClient:
+
+    def __init__(self) -> None:
+
+        self.session = requests.Session()
+
+        self.token: Optional[str] = None
+
+    def login(self) -> None:
+
+        if not NODEASSET_EMAIL or not NODEASSET_PASSWORD:
+
+            raise RuntimeError(
+                "NODEASSET_EMAIL and NODEASSET_PASSWORD are required"
             )
 
-            output = event.model_dump(mode="json")
+        response = self.session.post(
+            self.url(NODEASSET_LOGIN_PATH),
+            json={
+                "email": NODEASSET_EMAIL,
+                "password": NODEASSET_PASSWORD,
+            },
+            timeout=HTTP_TIMEOUT,
+        )
 
-            # Console log
-            print(output, flush=True)
+        response.raise_for_status()
 
-            # Save to local file
-            with open("decisions.log", "a") as f:
-                f.write(json.dumps(output) + "\n")
+        payload = response.json()
 
-            # Publish to Azure Service Bus
-            publish_signal(output)
+        token = (
+            payload.get("token")
+            or payload.get("jwt")
+            or payload.get("access_token")
+            or (payload.get("user") or {}).get("token")
+        )
 
-        except Exception as e:
-            print({
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "status": "error",
-                "error": str(e)
-            }, flush=True)
+        if not token:
 
-        time.sleep(10)
+            raise RuntimeError(
+                "NodeAsset login succeeded but no token was returned"
+            )
+
+        self.token = token
+
+        logger.info(
+            "NodeAsset authentication successful"
+        )
+
+    def subscribed_trades(
+        self,
+        after_id: Optional[str]
+    ) -> Dict[str, Any]:
+
+        if not self.token:
+
+            self.login()
+
+        params: Dict[str, Any] = {
+            "limit": NODEASSET_LIMIT
+        }
+
+        if after_id:
+
+            params["after_id"] = after_id
+
+        response = self.session.get(
+            self.url(NODEASSET_FEED_PATH),
+            params=params,
+            headers={
+                "Authorization": f"Bearer {self.token}"
+            },
+            timeout=HTTP_TIMEOUT,
+        )
+
+        if response.status_code in (401, 403):
+
+            logger.warning(
+                "NodeAsset token expired, re-authenticating"
+            )
+
+            self.login()
+
+            response = self.session.get(
+                self.url(NODEASSET_FEED_PATH),
+                params=params,
+                headers={
+                    "Authorization": f"Bearer {self.token}"
+                },
+                timeout=HTTP_TIMEOUT,
+            )
+
+        response.raise_for_status()
+
+        return response.json()
+
+    def url(self, path: str) -> str:
+
+        return (
+            f"{NODEASSET_API_URL}/"
+            f"{path.lstrip('/')}"
+        )
 
 
-# -----------------------------
-# Entry Point
-# -----------------------------
+def load_cursor() -> Optional[str]:
+
+    if not CURSOR_FILE.exists():
+
+        return None
+
+    cursor = CURSOR_FILE.read_text().strip()
+
+    return cursor or None
+
+
+def save_cursor(cursor: Optional[str]) -> None:
+
+    if not cursor:
+
+        return
+
+    CURSOR_FILE.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    CURSOR_FILE.write_text(cursor)
+
+
+def poll_once(
+    client: NodeAssetClient
+) -> Dict[str, Any]:
+
+    cursor = load_cursor()
+
+    payload = client.subscribed_trades(cursor)
+
+    trades: List[Dict[str, Any]] = (
+        payload.get("trades") or []
+    )
+
+    processed = [
+        append_trade_event(
+            trade,
+            source="nodeasset_api"
+        )
+        for trade in trades
+    ]
+
+    next_cursor = payload.get("next_cursor")
+
+    save_cursor(next_cursor)
+
+    summary = {
+        "timestamp": (
+            datetime.now(timezone.utc).isoformat()
+        ),
+        "status": "ok",
+        "count": len(processed),
+        "next_cursor": next_cursor,
+    }
+
+    logger.info(
+        f"Processed {len(processed)} trades"
+    )
+
+    return summary
+
+
+def poll() -> None:
+
+    logger.info(
+        "NodeAsset subscribed trade poller started"
+    )
+
+    client = NodeAssetClient()
+
+    client.login()
+
+    while True:
+
+        try:
+
+            poll_once(client)
+
+        except Exception as exc:
+
+            logger.error(
+                f"Poller failure: {str(exc)}"
+            )
+
+            if NODEASSET_ONCE:
+
+                raise
+
+        if NODEASSET_ONCE:
+
+            break
+
+        time.sleep(NODEASSET_POLL_SECONDS)
+
+
 if __name__ == "__main__":
+
     poll()

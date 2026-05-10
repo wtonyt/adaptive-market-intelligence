@@ -9,6 +9,11 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import jwt
 
 from src.db.database import Base, engine
+from src.services.copilot_analysis_engine import (
+    answer_copilot_question,
+    build_copilot_analysis,
+    post_analysis_callback,
+)
 from src.services.openclaw_reasoning_engine import reason_over_openclaw_trade
 from src.services.trade_events import append_event_log, append_trade_event, event_token_matches
 
@@ -157,6 +162,36 @@ def ingest_nodeasset_trade_fallback(
         source="nodeasset_api",
         mode="direct-api-fallback",
     )
+
+
+@app.post("/events/openclaw/copilot-analysis")
+def ingest_openclaw_copilot_analysis(
+    payload: Dict[str, Any],
+    authorization: Optional[str] = Header(None),
+    x_event_token: Optional[str] = Header(None, alias="X-Event-Token"),
+):
+    _verify_event_ingest_token(authorization, x_event_token)
+    analysis = build_copilot_analysis(payload)
+    callback_sent = post_analysis_callback(analysis)
+
+    return {
+        "status": "ready",
+        "mode": "openclaw-copilot",
+        "callback_sent": callback_sent,
+        "analysis": analysis,
+    }
+
+
+@app.post("/events/openclaw/copilot-chat")
+def ingest_openclaw_copilot_chat(
+    payload: Dict[str, Any],
+    authorization: Optional[str] = Header(None),
+    x_event_token: Optional[str] = Header(None, alias="X-Event-Token"),
+):
+    _verify_event_ingest_token(authorization, x_event_token)
+    return {
+        "reply": answer_copilot_question(payload)
+    }
 
 
 @app.post("/run")

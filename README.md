@@ -12,6 +12,14 @@ https://github.com/nodeassetcorp/nodeasset-openclaw-trader
 
 This repo expects `nodeasset-openclaw-trader` to already be running and forwarding authenticated NodeAsset trade events. Market ML Databricks is the downstream reasoning app, not the NodeAsset webhook receiver.
 
+For NodeAsset CoPilot, this app also accepts analysis requests from `nodeasset-openclaw-trader`:
+
+```text
+POST /events/openclaw/copilot-analysis
+```
+
+Set `NODEASSET_COPILOT_RESULT_URL` to the NodeAsset API callback endpoint, usually `/gappers/copilot/analysis-results`, so completed findings can appear in NodeAsset Terminal in near real time.
+
 ```text
 NodeAsset global trades
         |
@@ -103,6 +111,8 @@ Follow that repo's README to configure NodeAsset authentication, webhook signing
 ```bash
 FORWARD_URL=http://market_ml_api:8000/events/openclaw/nodeasset-trade
 FORWARD_TOKEN=replace-with-shared-token
+COPILOT_FORWARD_URL=http://market_ml_api:8000/events/openclaw/copilot-analysis
+COPILOT_FORWARD_TOKEN=replace-with-shared-token
 ```
 
 Configure this app with the same token:
@@ -213,6 +223,8 @@ NODEASSET_DEFAULT_TIMING_SCORE=0.75
 NODEASSET_OPENCLAW_ACTION_THRESHOLD=0.70
 NODEASSET_EVENT_LOG=data/nodeasset_trades.log
 NODEASSET_REASONED_EVENT_LOG=data/nodeasset_openclaw_reasoned.log
+NODEASSET_COPILOT_RESULT_URL=https://api.nodeasset.com/gappers/copilot/analysis-results
+NODEASSET_COPILOT_RESULT_TOKEN=replace-with-shared-token
 ```
 
 ## Persistence

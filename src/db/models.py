@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime
+from sqlalchemy import Column, Integer, String, Float, DateTime, JSON
 from datetime import datetime, timezone
 from sqlalchemy import Boolean
 from src.db.database import Base
@@ -94,3 +94,44 @@ class AgentPerformance(Base):
     was_correct = Column(Boolean)
 
     timestamp = Column(DateTime, index=True)
+
+class TradeEvent(Base):
+    __tablename__ = "trade_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    trade_id = Column(String, index=True, nullable=True)
+    provider = Column(String, index=True, nullable=False, default="nodeasset")
+    source = Column(String, nullable=True)
+
+    symbol = Column(String, index=True, nullable=True)
+    side = Column(String, nullable=True)
+    specialist = Column(String, nullable=True)
+
+    confidence = Column(Float, nullable=True)
+    price = Column(Float, nullable=True)
+
+    event_timestamp = Column(DateTime(timezone=True), nullable=True)
+
+    processing_state = Column(String, nullable=False, default="RECEIVED")
+    execution_status = Column(String, nullable=False, default="NOT_EXECUTED")
+
+    raw_payload = Column(JSON, nullable=True)
+    normalized_payload = Column(JSON, nullable=True)
+
+    approved_at = Column(DateTime(timezone=True), nullable=True)
+    executed_at = Column(DateTime(timezone=True), nullable=True)
+    failed_at = Column(DateTime(timezone=True), nullable=True)
+
+    failure_reason = Column(String, nullable=True)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc)
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc)
+    )

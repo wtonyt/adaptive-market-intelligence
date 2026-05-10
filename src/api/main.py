@@ -1,12 +1,14 @@
 from datetime import datetime, timezone
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Body
 from fastapi.responses import JSONResponse
-
+from src.services.trade_events import append_trade_event
 from src.config.settings import settings
 from src.services.poller import poll_once, NodeAssetClient
 from src.utils.logger import logger
-
+from src.db.database import SessionLocal
+from src.db.models import TradeEvent
+from src.services.trade_events import update_trade_event_state
 
 app = FastAPI(
     title="Market ML Trading Platform",
@@ -74,3 +76,87 @@ def poll_feed():
                 "message": str(exc)
             }
         )
+    
+@app.post("/test-event")
+def test_event(
+    payload: dict = Body(...)
+):
+
+    event = append_trade_event(
+        payload,
+        source="manual_test"
+    )
+
+    return {
+        "status": "ingested",
+        "event": event
+    }
+
+@app.get("/metrics")
+def metrics():
+
+    db = SessionLocal()
+
+    try:
+
+        total_events = (
+            db.query(TradeEvent)
+            .count()
+        )
+
+        buy_events = (
+            db.query(TradeEvent)
+            .filter(
+                TradeEvent.side == "BUY"
+            )
+            .count()
+        )
+
+        sell_events = (
+            db.query(TradeEvent)
+            .filter(
+                TradeEvent.side == "SELL"
+            )
+            .count()
+        )
+
+        pending_execution = (
+            db.query(TradeEvent)
+            .filter(
+                TradeEvent.execution_status
+                == "NOT_EXECUTED"
+            )
+            .count()
+        )
+
+        return {
+            "status": "healthy",
+            "total_events": total_events,
+            "buy_events": buy_events,
+            "sell_events": sell_events,
+            "pending_execution": pending_execution
+        }
+
+    finally:
+
+        db.close()
+
+@app.post("/test-approve/{trade_id}")
+def test_approve(trade_id: str):
+
+    event = update_trade_event_state(
+        trade_id=trade_id,
+        processing_state="APPROVED",
+        execution_status="PENDING"
+    )
+
+    if not event:
+
+        return {
+            "status": "not_found"
+        }
+
+    return {
+        "status": "approved",
+        "trade_id": trade_id
+    }

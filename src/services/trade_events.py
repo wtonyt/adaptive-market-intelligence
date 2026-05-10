@@ -3,8 +3,9 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
-
 from fastapi import HTTPException
+from src.db.database import SessionLocal
+from src.db.models import TradeEvent
 
 
 NODEASSET_EVENT_NAME = "nodeasset.trade.received"
@@ -44,13 +45,83 @@ def normalize_trade_event(payload: Dict[str, Any], source: str) -> Dict[str, Any
     }
 
 
-def append_trade_event(payload: Dict[str, Any], source: str = "nodeasset_api") -> Dict[str, Any]:
+def append_trade_event(
+    payload: Dict[str, Any],
+    source: str = "nodeasset_api"
+) -> Dict[str, Any]:
+
     event = normalize_trade_event(payload, source)
 
-    EVENT_LOG.parent.mkdir(parents=True, exist_ok=True)
-    with EVENT_LOG.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(event, sort_keys=True))
+    EVENT_LOG.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    with EVENT_LOG.open(
+        "a",
+        encoding="utf-8"
+    ) as handle:
+
+        handle.write(
+            json.dumps(event, sort_keys=True)
+        )
+
         handle.write("\n")
+
+    db = SessionLocal()
+
+    try:
+
+        existing = None
+
+        if event.get("trade_id"):
+
+            existing = (
+                db.query(TradeEvent)
+                .filter(
+                    TradeEvent.trade_id
+                    == str(event["trade_id"])
+                )
+                .first()
+            )
+
+        if existing:
+
+            return event
+
+        db_event = TradeEvent(
+            trade_id=(
+                str(event.get("trade_id"))
+                if event.get("trade_id")
+                else None
+            ),
+            provider="nodeasset",
+            source=source,
+            symbol=event.get("symbol"),
+            side=event.get("side"),
+            specialist=event.get("specialist"),
+            confidence=None,
+            price=(
+                float(event["price"])
+                if event.get("price") is not None
+                else None
+            ),
+            event_timestamp=_parse_timestamp(
+                event.get("timestamp")
+            ),
+            processing_state="RECEIVED",
+            execution_status="NOT_EXECUTED",
+            raw_payload=payload,
+            normalized_payload=event,
+        )
+
+        db.add(db_event)
+
+        db.commit()
+
+    finally:
+
+        db.close()
 
     return event
 
@@ -248,3 +319,47 @@ def append_event_log(event: dict):
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(serializable, sort_keys=True))
         handle.write("\n")
+
+def update_trade_event_state(
+    trade_id: str,
+    processing_state: str,
+    execution_status: Optional[str] = None,
+    failure_reason: Optional[str] = None,
+):
+
+    db = SessionLocal()
+
+    try:
+
+        event = (
+            db.query(TradeEvent)
+            .filter(TradeEvent.trade_id == trade_id)
+            .first()
+        )
+
+        if not event:
+            return None
+
+        event.processing_state = processing_state
+        event.updated_at = datetime.now(timezone.utc)
+
+        if execution_status:
+            event.execution_status = execution_status
+
+        if processing_state == "APPROVED":
+            event.approved_at = datetime.now(timezone.utc)
+
+        if processing_state == "EXECUTED":
+            event.executed_at = datetime.now(timezone.utc)
+
+        if processing_state == "FAILED":
+            event.failed_at = datetime.now(timezone.utc)
+            event.failure_reason = failure_reason
+
+        db.commit()
+
+        return event
+
+    finally:
+
+        db.close()

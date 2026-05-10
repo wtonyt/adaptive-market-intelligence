@@ -4,6 +4,14 @@ Market ML Databricks is a customer-side reasoning and analytics application for 
 
 The default integration mode is OpenClaw.
 
+Install and configure the NodeAsset OpenClaw bridge first:
+
+```text
+https://github.com/nodeassetcorp/nodeasset-openclaw-trader
+```
+
+This repo expects `nodeasset-openclaw-trader` to already be running and forwarding authenticated NodeAsset trade events. Market ML Databricks is the downstream reasoning app, not the NodeAsset webhook receiver.
+
 ```text
 NodeAsset global trades
         |
@@ -12,6 +20,7 @@ NodeAsset subscription filter
         |
         v
 nodeasset-openclaw-trader
+install first: https://github.com/nodeassetcorp/nodeasset-openclaw-trader
         |
         v
 Market ML Databricks reasoning API
@@ -20,14 +29,14 @@ Market ML Databricks reasoning API
 PostgreSQL consensus records + JSONL event logs + downstream analytics
 ```
 
-Direct NodeAsset API polling is still present as a fallback, but it is intentionally de-prioritized. New customer integrations should prefer `nodeasset-openclaw-trader` because it gives the customer a local agent boundary for their own context, tools, policies, and prompts before Market ML persists and evaluates the signal.
+Direct NodeAsset API polling is still present as a fallback, but it is intentionally de-prioritized. New customer integrations should install [`nodeasset-openclaw-trader`](https://github.com/nodeassetcorp/nodeasset-openclaw-trader) first because it gives the customer a local agent boundary for their own context, tools, policies, and prompts before Market ML persists and evaluates the signal.
 
 ## What Happens When Trades Start
 
 When NodeAsset emits a new trade for a subscribed specialist:
 
 1. NodeAsset keeps the trade global and applies subscription entitlement.
-2. `nodeasset-openclaw-trader` receives the entitled trade by webhook push mode or optional pull mode.
+2. [`nodeasset-openclaw-trader`](https://github.com/nodeassetcorp/nodeasset-openclaw-trader) receives the entitled trade by webhook push mode or optional pull mode.
 3. OpenClaw forwards the event to this app at `/events/openclaw/nodeasset-trade`.
 4. This app normalizes the event into a `TraderSignal`.
 5. The reasoning layer evaluates confidence, liquidity, timing, market regime, and position sizing.
@@ -82,7 +91,14 @@ For OpenClaw events, NodeAsset is treated as the subscribed specialist signal. T
 
 ## OpenClaw Default Path
 
-Configure `nodeasset-openclaw-trader` to forward to this API:
+Install `nodeasset-openclaw-trader` before running this app:
+
+```bash
+git clone https://github.com/nodeassetcorp/nodeasset-openclaw-trader.git
+cd nodeasset-openclaw-trader
+```
+
+Follow that repo's README to configure NodeAsset authentication, webhook signing, and OpenClaw runtime settings. Once the bridge is installed, configure it to forward to this API:
 
 ```bash
 FORWARD_URL=http://market_ml_api:8000/events/openclaw/nodeasset-trade
@@ -217,11 +233,11 @@ JSON-lines logs are also written for lightweight local processing:
 
 This repo is an example customer-side integration for NodeAsset. It demonstrates:
 
-- Recommended: NodeAsset API -> `nodeasset-openclaw-trader` -> Market ML Databricks.
+- Recommended: NodeAsset API -> [`nodeasset-openclaw-trader`](https://github.com/nodeassetcorp/nodeasset-openclaw-trader) -> Market ML Databricks.
 - Fallback: NodeAsset API -> Market ML Databricks direct endpoint.
 - Legacy fallback: NodeAsset API -> local poller -> JSONL event log.
 
-The recommended OpenClaw path lets the customer keep reasoning local. NodeAsset supplies subscribed specialist trades. OpenClaw gives the customer an agent surface for context, tools, market data, risk rules, portfolio state, compliance checks, and explanations. Market ML Databricks persists and evaluates the resulting decisions.
+The recommended OpenClaw path lets the customer keep reasoning local. NodeAsset supplies subscribed specialist trades. [`nodeasset-openclaw-trader`](https://github.com/nodeassetcorp/nodeasset-openclaw-trader) receives and authenticates the NodeAsset side, OpenClaw gives the customer an agent surface for context, tools, market data, risk rules, portfolio state, compliance checks, and explanations, and Market ML Databricks persists and evaluates the resulting decisions.
 
 This keeps NodeAsset's source of truth compact: trades remain global, subscriptions determine entitlement, and customer-side systems own downstream interpretation.
 

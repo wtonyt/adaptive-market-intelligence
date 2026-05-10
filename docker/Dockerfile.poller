@@ -8,4 +8,4 @@ RUN pip install --no-cache-dir -r requirements-poller.txt
 
 COPY . .
 
-CMD ["python", "-u", "src/services/poller.py"]
+CMD ["python", "-u", "-m", "src.services.poller"]

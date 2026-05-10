@@ -6,8 +6,12 @@ services:
     environment:
       TEST_MODE: "true"
       JWT_SECRET: "${JWT_SECRET:-myjwtsecret}"
+      EVENT_INGEST_TOKEN: "${EVENT_INGEST_TOKEN:-}"
+      NODEASSET_EVENT_LOG: "${NODEASSET_EVENT_LOG:-data/nodeasset_trades.log}"
     ports:
       - "8000:8000"
+    volumes:
+      - ./data:/app/data
 
   poller:
     build:

@@ -1,8 +1,8 @@
 # Market ML Databricks
 
-Market ML Databricks is a customer-side listener and processing scaffold for the NodeAsset trade subscription system. It connects to the NodeAsset API, authenticates as a NodeAsset customer, reads only the trades that customer is subscribed to, and records each received trade as an event that downstream ML, analytics, execution, or alerting workflows can consume.
+Market ML Databricks is a customer-side listener and processing scaffold for the NodeAsset trade subscription system. It can connect directly to the NodeAsset API, or it can receive NodeAsset trade events from an OpenClaw agent. In both modes, it records each received trade as an event that downstream ML, analytics, execution, or alerting workflows can consume.
 
-The repo also contains an earlier local ML pipeline for market data ingestion and model training. That pipeline is still useful as a scaffold, but the production integration point for NodeAsset is the `poller` service.
+The repo also contains an earlier local ML pipeline for market data ingestion and model training. That pipeline is still useful as a scaffold, but the production integration points for NodeAsset are the direct `poller` service and the OpenClaw-compatible event ingestion API.
 
 ## What Users Will See
 
@@ -44,23 +44,23 @@ NodeAsset API
   Exposes /gappers/subscribed-trades for authenticated customers
         |
         v
-Market ML Databricks poller
-  Logs in as the customer
-  Polls subscribed trades with a cursor
-  Writes normalized JSON events
+Market ML Databricks
+  Option A: logs into NodeAsset and polls subscribed trades with a cursor
+  Option B: receives NodeAsset trade events from an OpenClaw agent
+  Writes normalized JSON events in both modes
         |
         v
 Customer processing
   ML features, alerts, dashboards, execution reviews, reporting
 ```
 
-The key design choice is that trades remain global in NodeAsset. Customer visibility is derived from subscriptions, not by duplicating separate trade streams for every user. That keeps the source of truth compact while still giving each customer a private feed.
+The key design choice is that trades remain global in NodeAsset. Customer visibility is derived from subscriptions, not by duplicating separate trade streams for every user. That keeps the source of truth compact while still giving each customer a private feed. OpenClaw can sit between NodeAsset and this repo when the customer wants an agent runtime to own policy, routing, and automation decisions.
 
 ## Active Services
 
 ### Poller
 
-The poller is the real-time NodeAsset integration service.
+The poller is the direct NodeAsset integration service.
 
 Source: `src/services/poller.py`
 
@@ -73,6 +73,35 @@ Responsibilities:
 - Persist the next cursor locally.
 - Append each subscribed trade to a JSON-lines event log.
 - Print a compact operational summary for container logs.
+
+### OpenClaw Event Ingestion
+
+The API can receive NodeAsset trade events from an OpenClaw agent. This mode is useful when the customer wants OpenClaw to manage NodeAsset authentication, specialist subscription handling, automation policy, and event routing.
+
+Endpoints:
+
+- `POST /events/nodeasset-trade`
+- `POST /events/openclaw/nodeasset-trade`
+
+Both endpoints accept either a raw NodeAsset trade object or an OpenClaw-style envelope:
+
+```json
+{
+  "type": "nodeasset.trade.received",
+  "data": {
+    "cursor": "184927",
+    "trade_id": "trd_01",
+    "specialist": "runner",
+    "symbol": "AAPL",
+    "side": "BUY",
+    "quantity": 10,
+    "price": 184.22,
+    "timestamp": "2026-05-11T14:34:59.000Z"
+  }
+}
+```
+
+The event is normalized and appended to the same `nodeasset_trades.log` file used by the direct poller.
 
 ### API
 
@@ -179,6 +208,7 @@ The poller is configured entirely through environment variables.
 | `NODEASSET_CURSOR_FILE` | `data/nodeasset_cursor.txt` | Cursor persistence file. |
 | `NODEASSET_EVENT_LOG` | `data/nodeasset_trades.log` | JSON-lines trade event log. |
 | `NODEASSET_HTTP_TIMEOUT` | `15` | HTTP timeout in seconds. |
+| `EVENT_INGEST_TOKEN` | empty | Optional bearer or `X-Event-Token` value required by OpenClaw event ingestion endpoints. |
 
 Never commit customer credentials. Pass them through the shell, CI secrets, or the deployment platform secret manager.
 
@@ -207,6 +237,32 @@ NODEASSET_EMAIL='customer@example.com' \
 NODEASSET_PASSWORD='...' \
 NODEASSET_POLL_SECONDS=5 \
 docker compose up poller
+```
+
+Run the API for OpenClaw event ingestion:
+
+```sh
+EVENT_INGEST_TOKEN='shared-secret' docker compose up api
+```
+
+Send a local OpenClaw-style event:
+
+```sh
+curl -X POST http://localhost:8000/events/openclaw/nodeasset-trade \
+  -H 'Content-Type: application/json' \
+  -H 'X-Event-Token: shared-secret' \
+  -d '{
+    "type": "nodeasset.trade.received",
+    "data": {
+      "trade_id": "trd_01",
+      "specialist": "runner",
+      "symbol": "AAPL",
+      "side": "BUY",
+      "quantity": 10,
+      "price": 184.22,
+      "timestamp": "2026-05-11T14:34:59.000Z"
+    }
+  }'
 ```
 
 Stop services and remove the Compose network:
@@ -262,11 +318,29 @@ For a customer using the full NodeAsset product:
 2. On Settings, the customer selects active specialists such as `runner` or `ignition`.
 3. NodeAsset records the subscription by authenticated email.
 4. When those specialists generate trades, NodeAsset projects visibility into that customer's subscription window.
-5. This poller logs in as the same customer.
+5. Either this poller logs in as the same customer, or an OpenClaw agent logs in and forwards normalized trade events here.
 6. The customer receives only subscribed trades.
 7. The customer's local event log becomes the integration point for proprietary analysis, automation, dashboards, or ML workflows.
 
 The customer should not see trades for unsubscribed specialists, expired subscription windows, other customers, or internal agent-only views.
+
+## Direct Pull vs OpenClaw Push
+
+Use direct pull when:
+
+- The customer wants the simplest deployment.
+- This repo is allowed to hold NodeAsset credentials.
+- Cursor ownership belongs to this app.
+- The output is mainly analytics or ML processing.
+
+Use OpenClaw push when:
+
+- The customer wants an agent runtime to mediate trade handling.
+- NodeAsset credentials should live with the OpenClaw channel/plugin.
+- The agent needs to reason, filter, annotate, alert, or route before the ML app stores the event.
+- Multiple downstream consumers should receive the same NodeAsset event.
+
+Both paths write the same normalized JSON-lines event format, so downstream processing does not need to care which integration mode produced the event.
 
 ## Deployment Notes
 
@@ -275,6 +349,7 @@ The repository includes Azure Container App infrastructure under `infra/envs/dev
 Before deploying for a real customer:
 
 - Store `NODEASSET_EMAIL` and `NODEASSET_PASSWORD` as secrets.
+- If using OpenClaw ingestion, store `EVENT_INGEST_TOKEN` as a shared secret and send it as `Authorization: Bearer <token>` or `X-Event-Token`.
 - Confirm `NODEASSET_API_URL` points to the environment where `/gappers/subscribed-trades` is deployed.
 - Mount or persist the cursor file if replay protection must survive container replacement.
 - Ship `nodeasset_trades.log` to durable storage or replace the file writer with a queue/database sink.
@@ -306,6 +381,7 @@ docker/Dockerfile.api           FastAPI image
 requirements-poller.txt         Runtime deps for the poller
 requirements.txt                API and local ML pipeline deps
 src/services/poller.py          NodeAsset subscribed trade listener
+src/services/trade_events.py    Shared event normalization and JSON-lines writer
 src/api/main.py                 FastAPI health and pipeline trigger
 src/ingestion/market_data.py    yfinance ingestion
 src/features/bronze.py          Bronze parquet stage

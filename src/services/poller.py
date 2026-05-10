@@ -8,6 +8,8 @@ from typing import Any, Dict, List, Optional
 import requests
 from dotenv import load_dotenv
 
+from src.services.trade_events import append_trade_event
+
 load_dotenv()
 
 NODEASSET_API_URL = os.getenv("NODEASSET_API_URL", "https://api.nodeasset.com").rstrip("/")
@@ -19,7 +21,6 @@ NODEASSET_POLL_SECONDS = float(os.getenv("NODEASSET_POLL_SECONDS", "5"))
 NODEASSET_LIMIT = int(os.getenv("NODEASSET_LIMIT", "100"))
 NODEASSET_ONCE = os.getenv("NODEASSET_ONCE", "false").lower() == "true"
 CURSOR_FILE = Path(os.getenv("NODEASSET_CURSOR_FILE", "data/nodeasset_cursor.txt"))
-EVENT_LOG = Path(os.getenv("NODEASSET_EVENT_LOG", "data/nodeasset_trades.log"))
 HTTP_TIMEOUT = float(os.getenv("NODEASSET_HTTP_TIMEOUT", "15"))
 
 
@@ -102,32 +103,12 @@ def save_cursor(cursor: Optional[str]) -> None:
     CURSOR_FILE.write_text(cursor)
 
 
-def process_trade(trade: Dict[str, Any]) -> Dict[str, Any]:
-    event = {
-        "processed_at": datetime.now(timezone.utc).isoformat(),
-        "cursor": trade.get("cursor"),
-        "trade_id": trade.get("trade_id"),
-        "specialist": trade.get("specialist"),
-        "symbol": trade.get("symbol"),
-        "side": trade.get("side"),
-        "quantity": trade.get("quantity"),
-        "price": trade.get("price"),
-        "timestamp": trade.get("timestamp"),
-    }
-
-    EVENT_LOG.parent.mkdir(parents=True, exist_ok=True)
-    with EVENT_LOG.open("a") as f:
-        f.write(json.dumps(event) + "\n")
-
-    return event
-
-
 def poll_once(client: NodeAssetClient) -> Dict[str, Any]:
     cursor = load_cursor()
     payload = client.subscribed_trades(cursor)
     trades: List[Dict[str, Any]] = payload.get("trades") or []
 
-    processed = [process_trade(trade) for trade in trades]
+    processed = [append_trade_event(trade, source="nodeasset_api") for trade in trades]
     next_cursor = payload.get("next_cursor")
     save_cursor(next_cursor)
 

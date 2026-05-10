@@ -1,9 +1,13 @@
 # src/api/main.py
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
+from typing import Any, Dict, Optional
+
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 import requests, os
 from dotenv import load_dotenv
+
+from src.services.trade_events import append_trade_event, event_token_matches
 
 load_dotenv()
 app = FastAPI()
@@ -85,6 +89,56 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
 @app.get("/")
 def health():
     return {"status": "running"}
+
+
+def _extract_event_token(
+    authorization: Optional[str],
+    x_event_token: Optional[str],
+) -> Optional[str]:
+    if x_event_token:
+        return x_event_token
+    if authorization and authorization.lower().startswith("bearer "):
+        return authorization.split(" ", 1)[1].strip()
+    return authorization
+
+
+def _verify_event_ingest_token(
+    authorization: Optional[str],
+    x_event_token: Optional[str],
+) -> None:
+    provided = _extract_event_token(authorization, x_event_token)
+    if not event_token_matches(provided):
+        raise HTTPException(status_code=403, detail="Invalid event ingest token")
+
+
+@app.post("/events/nodeasset-trade")
+def ingest_nodeasset_trade(
+    payload: Dict[str, Any],
+    authorization: Optional[str] = Header(None),
+    x_event_token: Optional[str] = Header(None, alias="X-Event-Token"),
+):
+    _verify_event_ingest_token(authorization, x_event_token)
+    event = append_trade_event(payload, source="openclaw_agent")
+    return {
+        "status": "accepted",
+        "trade_id": event.get("trade_id"),
+        "cursor": event.get("cursor"),
+    }
+
+
+@app.post("/events/openclaw/nodeasset-trade")
+def ingest_openclaw_nodeasset_trade(
+    payload: Dict[str, Any],
+    authorization: Optional[str] = Header(None),
+    x_event_token: Optional[str] = Header(None, alias="X-Event-Token"),
+):
+    _verify_event_ingest_token(authorization, x_event_token)
+    event = append_trade_event(payload, source="openclaw_agent")
+    return {
+        "status": "accepted",
+        "trade_id": event.get("trade_id"),
+        "cursor": event.get("cursor"),
+    }
 
 @app.post("/run")
 def trigger_pipeline(background_tasks: BackgroundTasks, user=Depends(verify_token)):

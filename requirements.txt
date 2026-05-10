@@ -55,7 +55,6 @@ pillow==11.3.0
 platformdirs==4.4.0
 pluggy==1.6.0
 protobuf==6.33.6
-py4j==0.10.9.9
 pyarrow==20.0.0
 pyasn1==0.6.3
 pyasn1_modules==0.4.2
@@ -64,7 +63,6 @@ pydantic==2.13.3
 pydantic_core==2.46.3
 Pygments==2.20.0
 pyparsing==3.3.2
-pyspark==4.0.2
 pytest==8.4.2
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.1

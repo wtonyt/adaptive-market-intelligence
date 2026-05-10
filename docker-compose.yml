@@ -1,0 +1,28 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    environment:
+      TEST_MODE: "true"
+      JWT_SECRET: "${JWT_SECRET:-myjwtsecret}"
+    ports:
+      - "8000:8000"
+
+  poller:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.poller
+    environment:
+      NODEASSET_API_URL: "${NODEASSET_API_URL:-https://api.nodeasset.com}"
+      NODEASSET_EMAIL: "${NODEASSET_EMAIL:-}"
+      NODEASSET_PASSWORD: "${NODEASSET_PASSWORD:-}"
+      NODEASSET_LOGIN_PATH: "${NODEASSET_LOGIN_PATH:-/user/login}"
+      NODEASSET_FEED_PATH: "${NODEASSET_FEED_PATH:-/gappers/subscribed-trades}"
+      NODEASSET_LIMIT: "${NODEASSET_LIMIT:-100}"
+      NODEASSET_POLL_SECONDS: "${NODEASSET_POLL_SECONDS:-5}"
+      NODEASSET_ONCE: "${NODEASSET_ONCE:-false}"
+      NODEASSET_CURSOR_FILE: "${NODEASSET_CURSOR_FILE:-data/nodeasset_cursor.txt}"
+      NODEASSET_EVENT_LOG: "${NODEASSET_EVENT_LOG:-data/nodeasset_trades.log}"
+    volumes:
+      - ./data:/app/data

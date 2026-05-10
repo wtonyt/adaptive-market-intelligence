@@ -1,196 +1,205 @@
-# Market ML Databricks
+# NodeAsset CoPilot
 
-Market ML Databricks is a customer-side reasoning and analytics application for the NodeAsset subscription system. Customers subscribe to NodeAsset specialists, receive only the trades they are entitled to, and can use this repo to turn those subscribed signals into local decisions, sizing guidance, event logs, and historical feedback.
+This repository is the reference CoPilot analysis worker for NodeAsset. It may still be named `market-ml-databricks` in source control, but the product role is **NodeAsset CoPilot**: a customer-side reasoning service that reviews subscribed RL/ML specialist trades and returns human-trader analysis to NodeAsset Terminal.
 
-The default integration mode is OpenClaw.
+CoPilot is not an autonomous execution agent. Its job is to help traders understand whether a NodeAsset opportunity is approaching, still timely, stale, risky, or worth watching.
 
-Install and configure the NodeAsset OpenClaw bridge first:
+## What CoPilot Does
+
+When a subscribed NodeAsset specialist trade arrives, CoPilot:
+
+- receives an analysis request from `nodeasset-openclaw-trader`,
+- evaluates the trade using the local reasoning layer,
+- classifies the setup for human review,
+- posts the analysis back to NodeAsset API,
+- lets NodeAsset Terminal show the findings in the `CoPilot` screen.
+
+The output is persisted by NodeAsset API and can be reviewed later.
 
 ```text
-https://github.com/nodeassetcorp/nodeasset-openclaw-trader
+NodeAsset API
+  subscribed RL/ML specialist trade
+        |
+        v
+nodeasset-openclaw-trader
+  verifies and forwards CoPilot request
+        |
+        v
+NodeAsset CoPilot
+  analyzes trade and posts findings
+        |
+        v
+NodeAsset API
+  stores copilot_trade_analyses
+        |
+        v
+NodeAsset Terminal
+  CoPilot screen + trade-specific chat
 ```
 
-This repo expects `nodeasset-openclaw-trader` to already be running and forwarding authenticated NodeAsset trade events. Market ML Databricks is the downstream reasoning app, not the NodeAsset webhook receiver.
+## Required Services
 
-For NodeAsset CoPilot, this app also accepts analysis requests from `nodeasset-openclaw-trader`:
+To enable CoPilot for a tenant or customer account, run these services:
+
+- **NodeAsset API**: owns subscriptions, trade entitlement, persisted CoPilot findings, and Terminal APIs.
+- **NodeAsset Terminal**: displays the `CoPilot` menu, analysis queue, reasons, risks, and chat.
+- **nodeasset-openclaw-trader**: receives NodeAsset events and forwards CoPilot analysis requests.
+- **NodeAsset CoPilot**: this service; performs the analysis and calls back to NodeAsset API.
+
+Install the OpenClaw bridge first:
+
+```bash
+git clone https://github.com/nodeassetcorp/nodeasset-openclaw-trader.git
+```
+
+## Enablement Checklist
+
+1. Confirm the customer has active NodeAsset specialist subscriptions.
+2. Deploy or run NodeAsset API with CoPilot endpoints enabled.
+3. Deploy NodeAsset Terminal with the `CoPilot` menu enabled.
+4. Install and configure `nodeasset-openclaw-trader`.
+5. Run this CoPilot service.
+6. Configure shared event tokens between services.
+7. Trigger a test trade or webhook test.
+8. Confirm Terminal shows a CoPilot record moving from `pending` or `processing` to `ready`.
+
+## Service Configuration
+
+### NodeAsset API
+
+NodeAsset API should know where to send CoPilot analysis requests:
+
+```text
+COPILOT_ANALYSIS_URL=http://nodeasset-openclaw-trader:8080/events/nodeasset-copilot-analysis
+COPILOT_ANALYSIS_TOKEN=replace-with-shared-token
+COPILOT_CHAT_URL=http://nodeasset-copilot:8000/events/openclaw/copilot-chat
+```
+
+NodeAsset API receives completed findings at:
+
+```text
+POST /gappers/copilot/analysis-results
+```
+
+The callback is protected by `COPILOT_ANALYSIS_TOKEN` or `COPILOT_RESULT_TOKEN`.
+
+### nodeasset-openclaw-trader
+
+The OpenClaw bridge should forward normal trade events and CoPilot analysis requests separately:
+
+```text
+FORWARD_URL=http://nodeasset-copilot:8000/events/openclaw/nodeasset-trade
+FORWARD_TOKEN=replace-with-shared-token
+
+COPILOT_FORWARD_URL=http://nodeasset-copilot:8000/events/openclaw/copilot-analysis
+COPILOT_FORWARD_TOKEN=replace-with-shared-token
+```
+
+### NodeAsset CoPilot
+
+This service verifies requests and posts findings back to NodeAsset API:
+
+```text
+EVENT_INGEST_TOKEN=replace-with-shared-token
+NODEASSET_COPILOT_RESULT_URL=https://api.nodeasset.com/gappers/copilot/analysis-results
+NODEASSET_COPILOT_RESULT_TOKEN=replace-with-shared-token
+```
+
+Local defaults are in `docker-compose.yml`.
+
+## CoPilot Endpoints
+
+### Analyze A Trade
+
+`nodeasset-openclaw-trader` calls:
 
 ```text
 POST /events/openclaw/copilot-analysis
 ```
 
-Set `NODEASSET_COPILOT_RESULT_URL` to the NodeAsset API callback endpoint, usually `/gappers/copilot/analysis-results`, so completed findings can appear in NodeAsset Terminal in near real time.
-
-```text
-NodeAsset global trades
-        |
-        v
-NodeAsset subscription filter
-        |
-        v
-nodeasset-openclaw-trader
-install first: https://github.com/nodeassetcorp/nodeasset-openclaw-trader
-        |
-        v
-Market ML Databricks reasoning API
-        |
-        v
-PostgreSQL consensus records + JSONL event logs + downstream analytics
-```
-
-Direct NodeAsset API polling is still present as a fallback, but it is intentionally de-prioritized. New customer integrations should install [`nodeasset-openclaw-trader`](https://github.com/nodeassetcorp/nodeasset-openclaw-trader) first because it gives the customer a local agent boundary for their own context, tools, policies, and prompts before Market ML persists and evaluates the signal.
-
-## What Happens When Trades Start
-
-When NodeAsset emits a new trade for a subscribed specialist:
-
-1. NodeAsset keeps the trade global and applies subscription entitlement.
-2. [`nodeasset-openclaw-trader`](https://github.com/nodeassetcorp/nodeasset-openclaw-trader) receives the entitled trade by webhook push mode or optional pull mode.
-3. OpenClaw forwards the event to this app at `/events/openclaw/nodeasset-trade`.
-4. This app normalizes the event into a `TraderSignal`.
-5. The reasoning layer evaluates confidence, liquidity, timing, market regime, and position sizing.
-6. The API returns a final action: `BUY`, `SELL`, `HOLD`, or `SKIP`.
-7. The raw event is appended to `data/nodeasset_trades.log`.
-8. The reasoned signal and consensus decision are persisted in PostgreSQL.
-
-Example response:
+Example request:
 
 ```json
 {
-  "status": "reasoned",
-  "mode": "openclaw",
-  "trade_id": "local-test-qa-3",
-  "specialist": "runner",
-  "symbol": "NVDA",
-  "decision": {
-    "recommended_action": "BUY",
-    "reasoning": {
-      "mode": "openclaw",
-      "regime": "UNKNOWN",
-      "threshold": 0.7,
-      "position_percent": 0.1,
-      "market_context_score": 0.75
-    },
-    "consensus": {
-      "symbol": "NVDA",
-      "rl_side": "BUY",
-      "consensus": true,
-      "consensus_score": 0.799,
-      "final_side": "BUY",
-      "confidence_score": 0.799
-    }
-  }
-}
-```
-
-`UNKNOWN` market regime is expected in a fresh local Docker database until `market_candles` has enough history for the requested symbol.
-
-## Reasoning Layer
-
-This branch now includes the QA reasoning pieces needed to reason over OpenClaw-forwarded NodeAsset trades:
-
-- `src/services/openclaw_reasoning_engine.py`: turns OpenClaw/NodeAsset events into local decisions.
-- `src/services/trade_events.py`: normalizes raw direct/API/OpenClaw event envelopes.
-- `src/services/market_regime_engine.py`: classifies the symbol as `TRENDING`, `VOLATILE`, `NEUTRAL`, or `UNKNOWN`.
-- `src/services/position_sizing_engine.py`: converts confidence and market regime into a suggested position percentage.
-- `src/db/*`: persists signal events, consensus events, market candles, and performance feedback.
-- `src/schemas/signals.py`: shared `TraderSignal` and `ConsensusSignal` models.
-
-For OpenClaw events, NodeAsset is treated as the subscribed specialist signal. The reasoning adapter then applies local confidence, liquidity, timing, market regime, and position sizing checks before returning an action.
-
-## OpenClaw Default Path
-
-Install `nodeasset-openclaw-trader` before running this app:
-
-```bash
-git clone https://github.com/nodeassetcorp/nodeasset-openclaw-trader.git
-cd nodeasset-openclaw-trader
-```
-
-Follow that repo's README to configure NodeAsset authentication, webhook signing, and OpenClaw runtime settings. Once the bridge is installed, configure it to forward to this API:
-
-```bash
-FORWARD_URL=http://market_ml_api:8000/events/openclaw/nodeasset-trade
-FORWARD_TOKEN=replace-with-shared-token
-COPILOT_FORWARD_URL=http://market_ml_api:8000/events/openclaw/copilot-analysis
-COPILOT_FORWARD_TOKEN=replace-with-shared-token
-```
-
-Configure this app with the same token:
-
-```bash
-EVENT_INGEST_TOKEN=replace-with-shared-token
-```
-
-The token may be sent as:
-
-```text
-X-Event-Token: replace-with-shared-token
-```
-
-or:
-
-```text
-Authorization: Bearer replace-with-shared-token
-```
-
-Sample OpenClaw event:
-
-```json
-{
-  "event": "nodeasset.trade.received",
+  "type": "nodeasset.copilot.analysis.requested",
+  "event_id": "customer@example.com:trd_01:analysis",
+  "user_email": "customer@example.com",
   "data": {
-    "trade_id": "664f2-example",
+    "trade_id": "trd_01",
     "specialist": "runner",
     "symbol": "NVDA",
     "side": "BUY",
-    "confidence": 0.82,
+    "quantity": 10,
     "price": 915.25,
     "timestamp": "2026-05-11T14:35:00Z"
   }
 }
 ```
 
-Manual test:
+Example response:
 
-```bash
-curl -X POST http://localhost:8000/events/openclaw/nodeasset-trade \
-  -H "Content-Type: application/json" \
-  -H "X-Event-Token: local-openclaw-token" \
-  -d '{
-    "event": "nodeasset.trade.received",
-    "data": {
-      "trade_id": "local-test-1",
-      "specialist": "runner",
-      "symbol": "NVDA",
-      "side": "BUY",
-      "confidence": 0.82,
-      "price": 915.25,
-      "timestamp": "2026-05-11T14:35:00Z"
-    }
-  }'
+```json
+{
+  "status": "ready",
+  "mode": "openclaw-copilot",
+  "callback_sent": true,
+  "analysis": {
+    "trade_id": "trd_01",
+    "actionability": "strong_watch",
+    "summary": "runner BUY on NVDA is classified as strong_watch. The review is decision support for a human trader, not an autonomous execution instruction.",
+    "confidence_score": 0.79,
+    "reasons": [
+      "runner issued a BUY signal on NVDA.",
+      "Composite confidence is 0.79.",
+      "Market regime is UNKNOWN."
+    ],
+    "risks": [
+      "Market regime is unknown because the local candle store does not yet have enough symbol history."
+    ],
+    "questions": [
+      "Is this signal still close to the original price?",
+      "How does this compare to recent trades from the same specialist?",
+      "What would make this setup stale?"
+    ]
+  }
+}
 ```
 
-## Direct API Fallback
+### Answer A Follow-Up Question
 
-The direct handoff endpoint remains available:
+NodeAsset API can call:
 
 ```text
-POST /events/nodeasset-trade
+POST /events/openclaw/copilot-chat
 ```
 
-It runs the same reasoning path and persistence as the OpenClaw endpoint, but it removes the local OpenClaw agent boundary. Use this mainly for internal tests, simple server-to-server integrations, or customers that only need deterministic sizing output from raw subscribed trades.
+The request includes the saved analysis and the trader's question. The response is intentionally simple:
 
-The older direct poller service is still included:
-
-```bash
-docker compose run --rm poller
+```json
+{
+  "reply": "The setup is still a watch, but it needs fresh price and volume context before a trader treats it as actionable."
+}
 ```
 
-The poller reads from NodeAsset's subscribed-trades API and appends normalized records to `data/nodeasset_trades.log`. It does not replace the preferred OpenClaw path.
+## What Gets Persisted
 
-## Local Docker Run
+NodeAsset API persists customer-facing CoPilot findings in MongoDB:
 
-Start PostgreSQL and the API:
+- `copilot_trade_analyses`
+- `copilot_trade_messages`
+
+This service also stores local reasoning records in PostgreSQL:
+
+- `signal_events`
+- `consensus_events`
+- `market_candles`
+- `agent_performance`
+
+NodeAsset API is the source used by Terminal. The local PostgreSQL data is useful for worker diagnostics, replay, and later model analysis.
+
+## Local Run
+
+Start the CoPilot worker and PostgreSQL:
 
 ```bash
 docker compose up --build api
@@ -213,46 +222,53 @@ Expected:
 }
 ```
 
-Default local values in `docker-compose.yml`:
+Manual CoPilot test:
 
-```text
-EVENT_INGEST_TOKEN=local-openclaw-token
-NODEASSET_DEFAULT_CONFIDENCE=0.82
-NODEASSET_DEFAULT_LIQUIDITY_SCORE=0.75
-NODEASSET_DEFAULT_TIMING_SCORE=0.75
-NODEASSET_OPENCLAW_ACTION_THRESHOLD=0.70
-NODEASSET_EVENT_LOG=data/nodeasset_trades.log
-NODEASSET_REASONED_EVENT_LOG=data/nodeasset_openclaw_reasoned.log
-NODEASSET_COPILOT_RESULT_URL=https://api.nodeasset.com/gappers/copilot/analysis-results
-NODEASSET_COPILOT_RESULT_TOKEN=replace-with-shared-token
+```bash
+curl -X POST http://localhost:8000/events/openclaw/copilot-analysis \
+  -H "Content-Type: application/json" \
+  -H "X-Event-Token: local-openclaw-token" \
+  -d '{
+    "type": "nodeasset.copilot.analysis.requested",
+    "user_email": "customer@example.com",
+    "data": {
+      "trade_id": "local-test-1",
+      "specialist": "runner",
+      "symbol": "NVDA",
+      "side": "BUY",
+      "quantity": 10,
+      "price": 915.25,
+      "timestamp": "2026-05-11T14:35:00Z"
+    }
+  }'
 ```
 
-## Persistence
+## Operational Notes
 
-PostgreSQL stores the reasoned outputs:
+- Run this service continuously if customers expect near real-time CoPilot findings.
+- If this service is down, NodeAsset Terminal can still show pending analysis records, but they will not become `ready`.
+- Use the same shared token across `COPILOT_ANALYSIS_TOKEN`, `COPILOT_FORWARD_TOKEN`, `EVENT_INGEST_TOKEN`, and `NODEASSET_COPILOT_RESULT_TOKEN` unless a tenant requires separate secrets.
+- The current implementation provides deterministic reasoning over the trade and local context. Richer analysis should add tools for live quotes, candles, specialist history, and similar historical trades.
+- `UNKNOWN` market regime is normal in a fresh local database until `market_candles` has enough symbol history.
 
-- `signal_events`: normalized NodeAsset specialist signal plus final action.
-- `consensus_events`: confidence score, final side, reason, and timestamp.
-- `market_candles`: symbol candle history used for regime detection.
-- `agent_performance`: feedback records used by adaptive weighting work.
+## Positioning
 
-JSON-lines logs are also written for lightweight local processing:
+NodeAsset CoPilot is best positioned as:
 
-- `data/nodeasset_trades.log`: raw normalized events from OpenClaw or direct ingestion.
-- `data/nodeasset_openclaw_reasoned.log`: normalized events after reasoning.
+```text
+Real-time reasoning over NodeAsset RL/ML generated trades for human traders.
+```
 
-## Commercial System Fit
+It helps customers understand:
 
-This repo is an example customer-side integration for NodeAsset. It demonstrates:
+- why a trade matters,
+- whether it is still timely,
+- what risks are visible,
+- what would make it stale,
+- what questions to ask before acting.
 
-- Recommended: NodeAsset API -> [`nodeasset-openclaw-trader`](https://github.com/nodeassetcorp/nodeasset-openclaw-trader) -> Market ML Databricks.
-- Fallback: NodeAsset API -> Market ML Databricks direct endpoint.
-- Legacy fallback: NodeAsset API -> local poller -> JSONL event log.
+It should not be marketed as autonomous execution unless a customer explicitly adds and controls execution tooling.
 
-The recommended OpenClaw path lets the customer keep reasoning local. NodeAsset supplies subscribed specialist trades. [`nodeasset-openclaw-trader`](https://github.com/nodeassetcorp/nodeasset-openclaw-trader) receives and authenticates the NodeAsset side, OpenClaw gives the customer an agent surface for context, tools, market data, risk rules, portfolio state, compliance checks, and explanations, and Market ML Databricks persists and evaluates the resulting decisions.
+## Future Rename
 
-This keeps NodeAsset's source of truth compact: trades remain global, subscriptions determine entitlement, and customer-side systems own downstream interpretation.
-
-## Spark Note
-
-This application does not currently use PySpark in the API, OpenClaw event path, direct poller, or reasoning layer. Spark dependencies are intentionally not installed in the local Docker runtime. If a future Databricks job needs Spark, add it to a separate Databricks job or job-specific image instead of the local API container.
+This repo can be renamed from `market-ml-databricks` to `nodeasset-copilot`. The expected product name in documentation and customer setup is already **NodeAsset CoPilot**.

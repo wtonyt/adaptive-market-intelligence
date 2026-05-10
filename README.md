@@ -1,8 +1,8 @@
 # Market ML Databricks
 
-Market ML Databricks is a customer-side listener and processing scaffold for the NodeAsset trade subscription system. It can connect directly to the NodeAsset API, or it can receive NodeAsset trade events from an OpenClaw agent. In both modes, it records each received trade as an event that downstream ML, analytics, execution, or alerting workflows can consume.
+Market ML Databricks is a customer-side listener and processing scaffold for the NodeAsset trade subscription system. It can connect directly to the NodeAsset API, or it can receive NodeAsset trade events forwarded by the `nodeasset-openclaw-trader` OpenClaw bridge. In both modes, it records each received trade as an event that downstream ML, analytics, execution, or alerting workflows can consume.
 
-The repo also contains an earlier local ML pipeline for market data ingestion and model training. That pipeline is still useful as a scaffold, but the production integration points for NodeAsset are the direct `poller` service and the OpenClaw-compatible event ingestion API.
+The repo also contains an earlier local ML pipeline for market data ingestion and model training. That pipeline is still useful as a scaffold, but the production integration points for NodeAsset are the direct `poller` service and the OpenClaw-compatible event ingestion API used by `nodeasset-openclaw-trader`.
 
 ## What Users Will See
 
@@ -46,7 +46,7 @@ NodeAsset API
         v
 Market ML Databricks
   Option A: logs into NodeAsset and polls subscribed trades with a cursor
-  Option B: receives NodeAsset trade events from an OpenClaw agent
+  Option B: receives NodeAsset trade events from nodeasset-openclaw-trader
   Writes normalized JSON events in both modes
         |
         v
@@ -54,7 +54,7 @@ Customer processing
   ML features, alerts, dashboards, execution reviews, reporting
 ```
 
-The key design choice is that trades remain global in NodeAsset. Customer visibility is derived from subscriptions, not by duplicating separate trade streams for every user. That keeps the source of truth compact while still giving each customer a private feed. OpenClaw can sit between NodeAsset and this repo when the customer wants an agent runtime to own policy, routing, and automation decisions.
+The key design choice is that trades remain global in NodeAsset. Customer visibility is derived from subscriptions, not by duplicating separate trade streams for every user. That keeps the source of truth compact while still giving each customer a private feed. `nodeasset-openclaw-trader` can sit between NodeAsset and this repo when the customer wants an OpenClaw runtime to own policy, routing, and automation decisions.
 
 ## Active Services
 
@@ -76,7 +76,7 @@ Responsibilities:
 
 ### OpenClaw Event Ingestion
 
-The API can receive NodeAsset trade events from an OpenClaw agent. This mode is useful when the customer wants OpenClaw to manage NodeAsset authentication, specialist subscription handling, automation policy, and event routing.
+The API can receive NodeAsset trade events from `nodeasset-openclaw-trader`. This mode is useful when the customer wants OpenClaw to manage NodeAsset webhook verification, specialist event handling, automation policy, and event routing before the ML app stores or processes the trade.
 
 Endpoints:
 
@@ -102,6 +102,8 @@ Both endpoints accept either a raw NodeAsset trade object or an OpenClaw-style e
 ```
 
 The event is normalized and appended to the same `nodeasset_trades.log` file used by the direct poller.
+
+Important boundary: this repo validates the shared `EVENT_INGEST_TOKEN`, but it does not verify NodeAsset webhook HMAC signatures. HMAC verification belongs in `nodeasset-openclaw-trader`, which receives NodeAsset webhook pushes, verifies `X-NodeAsset-Signature-256`, and then forwards authenticated normalized events here.
 
 ### API
 
@@ -265,6 +267,50 @@ curl -X POST http://localhost:8000/events/openclaw/nodeasset-trade \
   }'
 ```
 
+## Using With nodeasset-openclaw-trader
+
+The recommended OpenClaw path is:
+
+```text
+NodeAsset API
+  pushes signed nodeasset.trade.received webhook
+        |
+nodeasset-openclaw-trader
+  verifies NodeAsset signature
+  applies OpenClaw/customer routing policy
+  forwards normalized event with X-Event-Token
+        |
+Market ML Databricks
+  accepts event
+  appends nodeasset_trades.log
+  processes event for ML/analytics
+```
+
+Run this app's API:
+
+```sh
+EVENT_INGEST_TOKEN='shared-secret' docker compose up api
+```
+
+Configure `nodeasset-openclaw-trader` to forward here:
+
+```sh
+FORWARD_URL='http://host.docker.internal:8000/events/openclaw/nodeasset-trade'
+FORWARD_TOKEN='shared-secret'
+```
+
+If both projects run on the same Docker network, replace `host.docker.internal` with the service name or network alias for this API container.
+
+The shared secret must match:
+
+```text
+nodeasset-openclaw-trader FORWARD_TOKEN
+        ==
+market-ml-databricks EVENT_INGEST_TOKEN
+```
+
+This repo does not need NodeAsset credentials in OpenClaw push mode. NodeAsset auth, webhook signing, and optional NodeAsset pull-mode credentials live in `nodeasset-openclaw-trader`.
+
 Stop services and remove the Compose network:
 
 ```sh
@@ -318,7 +364,7 @@ For a customer using the full NodeAsset product:
 2. On Settings, the customer selects active specialists such as `runner` or `ignition`.
 3. NodeAsset records the subscription by authenticated email.
 4. When those specialists generate trades, NodeAsset projects visibility into that customer's subscription window.
-5. Either this poller logs in as the same customer, or an OpenClaw agent logs in and forwards normalized trade events here.
+5. Either this poller logs in as the same customer, or `nodeasset-openclaw-trader` receives/forwards normalized trade events here.
 6. The customer receives only subscribed trades.
 7. The customer's local event log becomes the integration point for proprietary analysis, automation, dashboards, or ML workflows.
 
@@ -336,7 +382,7 @@ Use direct pull when:
 Use OpenClaw push when:
 
 - The customer wants an agent runtime to mediate trade handling.
-- NodeAsset credentials should live with the OpenClaw channel/plugin.
+- NodeAsset webhook verification and optional pull credentials should live with `nodeasset-openclaw-trader`.
 - The agent needs to reason, filter, annotate, alert, or route before the ML app stores the event.
 - Multiple downstream consumers should receive the same NodeAsset event.
 
@@ -349,7 +395,7 @@ The repository includes Azure Container App infrastructure under `infra/envs/dev
 Before deploying for a real customer:
 
 - Store `NODEASSET_EMAIL` and `NODEASSET_PASSWORD` as secrets.
-- If using OpenClaw ingestion, store `EVENT_INGEST_TOKEN` as a shared secret and send it as `Authorization: Bearer <token>` or `X-Event-Token`.
+- If using `nodeasset-openclaw-trader`, store `EVENT_INGEST_TOKEN` here and configure the same value as `FORWARD_TOKEN` in `nodeasset-openclaw-trader`.
 - Confirm `NODEASSET_API_URL` points to the environment where `/gappers/subscribed-trades` is deployed.
 - Mount or persist the cursor file if replay protection must survive container replacement.
 - Ship `nodeasset_trades.log` to durable storage or replace the file writer with a queue/database sink.

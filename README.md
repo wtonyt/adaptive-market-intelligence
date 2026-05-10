@@ -1,449 +1,230 @@
 # Market ML Databricks
 
-Market ML Databricks is a customer-side listener and processing scaffold for the NodeAsset trade subscription system. It can connect directly to the NodeAsset API, or it can receive NodeAsset trade events forwarded by the `nodeasset-openclaw-trader` OpenClaw bridge. In both modes, it records each received trade as an event that downstream ML, analytics, execution, or alerting workflows can consume.
+Market ML Databricks is a customer-side reasoning and analytics application for the NodeAsset subscription system. Customers subscribe to NodeAsset specialists, receive only the trades they are entitled to, and can use this repo to turn those subscribed signals into local decisions, sizing guidance, event logs, and historical feedback.
 
-The repo also contains an earlier local ML pipeline for market data ingestion and model training. That pipeline is still useful as a scaffold, but the production integration points for NodeAsset are the direct `poller` service and the OpenClaw-compatible event ingestion API used by `nodeasset-openclaw-trader`.
-
-## What Users Will See
-
-When a subscribed specialist starts producing trades on the next trading day, customers running this service will see the poller emit one summary line per polling cycle and write one JSON event per trade to the event log.
-
-If no subscribed trades are available yet:
-
-```json
-{"timestamp":"2026-05-10T00:42:10.088055+00:00","status":"ok","count":0,"next_cursor":null}
-```
-
-When subscribed trades are available:
-
-```json
-{"timestamp":"2026-05-11T14:35:05.124000+00:00","status":"ok","count":2,"next_cursor":"184928"}
-```
-
-The event log receives one JSON line per trade:
-
-```json
-{"processed_at":"2026-05-11T14:35:05.120000+00:00","cursor":"184927","trade_id":"trd_01","specialist":"runner","symbol":"AAPL","side":"BUY","quantity":10,"price":184.22,"timestamp":"2026-05-11T14:34:59.000Z"}
-{"processed_at":"2026-05-11T14:35:05.123000+00:00","cursor":"184928","trade_id":"trd_02","specialist":"ignition","symbol":"NVDA","side":"SELL","quantity":3,"price":921.15,"timestamp":"2026-05-11T14:35:01.000Z"}
-```
-
-Customers only receive trades for specialists they are subscribed to in NodeAsset. The filtering is enforced by the NodeAsset API using the authenticated user's email and subscription windows.
-
-## System Context
-
-This repo is one part of the larger NodeAsset commercial system:
+The default integration mode is OpenClaw.
 
 ```text
-NodeAsset Terminal
-  Customer selects active specialists: runner, ignition
+NodeAsset global trades
         |
         v
-NodeAsset API
-  Stores subscriptions by user email and specialist
-  Projects generated trades into subscribed user windows
-  Exposes /gappers/subscribed-trades for authenticated customers
+NodeAsset subscription filter
         |
         v
-Market ML Databricks
-  Option A: logs into NodeAsset and polls subscribed trades with a cursor
-  Option B: receives NodeAsset trade events from nodeasset-openclaw-trader
-  Writes normalized JSON events in both modes
+nodeasset-openclaw-trader
         |
         v
-Customer processing
-  ML features, alerts, dashboards, execution reviews, reporting
+Market ML Databricks reasoning API
+        |
+        v
+PostgreSQL consensus records + JSONL event logs + downstream analytics
 ```
 
-The key design choice is that trades remain global in NodeAsset. Customer visibility is derived from subscriptions, not by duplicating separate trade streams for every user. That keeps the source of truth compact while still giving each customer a private feed. `nodeasset-openclaw-trader` can sit between NodeAsset and this repo when the customer wants an OpenClaw runtime to own policy, routing, and automation decisions.
+Direct NodeAsset API polling is still present as a fallback, but it is intentionally de-prioritized. New customer integrations should prefer `nodeasset-openclaw-trader` because it gives the customer a local agent boundary for their own context, tools, policies, and prompts before Market ML persists and evaluates the signal.
 
-## Active Services
+## What Happens When Trades Start
 
-### Poller
+When NodeAsset emits a new trade for a subscribed specialist:
 
-The poller is the direct NodeAsset integration service.
+1. NodeAsset keeps the trade global and applies subscription entitlement.
+2. `nodeasset-openclaw-trader` receives the entitled trade by webhook push mode or optional pull mode.
+3. OpenClaw forwards the event to this app at `/events/openclaw/nodeasset-trade`.
+4. This app normalizes the event into a `TraderSignal`.
+5. The reasoning layer evaluates confidence, liquidity, timing, market regime, and position sizing.
+6. The API returns a final action: `BUY`, `SELL`, `HOLD`, or `SKIP`.
+7. The raw event is appended to `data/nodeasset_trades.log`.
+8. The reasoned signal and consensus decision are persisted in PostgreSQL.
 
-Source: `src/services/poller.py`
-
-Responsibilities:
-
-- Login to the NodeAsset API with customer credentials.
-- Call `GET /gappers/subscribed-trades`.
-- Send the last processed cursor with `after_id`.
-- Retry login when the token expires or is rejected.
-- Persist the next cursor locally.
-- Append each subscribed trade to a JSON-lines event log.
-- Print a compact operational summary for container logs.
-
-### OpenClaw Event Ingestion
-
-The API can receive NodeAsset trade events from `nodeasset-openclaw-trader`. This mode is useful when the customer wants OpenClaw to manage NodeAsset webhook verification, specialist event handling, automation policy, and event routing before the ML app stores or processes the trade.
-
-Endpoints:
-
-- `POST /events/nodeasset-trade`
-- `POST /events/openclaw/nodeasset-trade`
-
-Both endpoints accept either a raw NodeAsset trade object or an OpenClaw-style envelope:
+Example response:
 
 ```json
 {
-  "type": "nodeasset.trade.received",
-  "data": {
-    "cursor": "184927",
-    "trade_id": "trd_01",
-    "specialist": "runner",
-    "symbol": "AAPL",
-    "side": "BUY",
-    "quantity": 10,
-    "price": 184.22,
-    "timestamp": "2026-05-11T14:34:59.000Z"
+  "status": "reasoned",
+  "mode": "openclaw",
+  "trade_id": "local-test-qa-3",
+  "specialist": "runner",
+  "symbol": "NVDA",
+  "decision": {
+    "recommended_action": "BUY",
+    "reasoning": {
+      "mode": "openclaw",
+      "regime": "UNKNOWN",
+      "threshold": 0.7,
+      "position_percent": 0.1,
+      "market_context_score": 0.75
+    },
+    "consensus": {
+      "symbol": "NVDA",
+      "rl_side": "BUY",
+      "consensus": true,
+      "consensus_score": 0.799,
+      "final_side": "BUY",
+      "confidence_score": 0.799
+    }
   }
 }
 ```
 
-The event is normalized and appended to the same `nodeasset_trades.log` file used by the direct poller.
+`UNKNOWN` market regime is expected in a fresh local Docker database until `market_candles` has enough history for the requested symbol.
 
-Important boundary: this repo validates the shared `EVENT_INGEST_TOKEN`, but it does not verify NodeAsset webhook HMAC signatures. HMAC verification belongs in `nodeasset-openclaw-trader`, which receives NodeAsset webhook pushes, verifies `X-NodeAsset-Signature-256`, and then forwards authenticated normalized events here.
+## Reasoning Layer
 
-### API
+This branch now includes the QA reasoning pieces needed to reason over OpenClaw-forwarded NodeAsset trades:
 
-The FastAPI service exposes a small protected endpoint that can trigger the local ML pipeline.
+- `src/services/openclaw_reasoning_engine.py`: turns OpenClaw/NodeAsset events into local decisions.
+- `src/services/trade_events.py`: normalizes raw direct/API/OpenClaw event envelopes.
+- `src/services/market_regime_engine.py`: classifies the symbol as `TRENDING`, `VOLATILE`, `NEUTRAL`, or `UNKNOWN`.
+- `src/services/position_sizing_engine.py`: converts confidence and market regime into a suggested position percentage.
+- `src/db/*`: persists signal events, consensus events, market candles, and performance feedback.
+- `src/schemas/signals.py`: shared `TraderSignal` and `ConsensusSignal` models.
 
-Source: `src/api/main.py`
+For OpenClaw events, NodeAsset is treated as the subscribed specialist signal. The reasoning adapter then applies local confidence, liquidity, timing, market regime, and position sizing checks before returning an action.
 
-Endpoints:
+## OpenClaw Default Path
 
-- `GET /` returns service health.
-- `POST /run` starts the local pipeline in the background.
+Configure `nodeasset-openclaw-trader` to forward to this API:
 
-In `TEST_MODE=true`, the API accepts a test JWT signed with `JWT_SECRET`. Outside test mode, it validates Azure JWTs using `AZURE_TENANT_ID` and `AZURE_AUDIENCE`.
+```bash
+FORWARD_URL=http://market_ml_api:8000/events/openclaw/nodeasset-trade
+FORWARD_TOKEN=replace-with-shared-token
+```
 
-### Local ML Pipeline
+Configure this app with the same token:
 
-The legacy pipeline is organized as a simple medallion flow:
+```bash
+EVENT_INGEST_TOKEN=replace-with-shared-token
+```
+
+The token may be sent as:
 
 ```text
-src/ingestion/market_data.py
-  yfinance -> data/raw/{SYMBOL}/{DATE}.csv
-
-src/features/bronze.py
-  raw CSVs -> data/bronze/market_data.parquet
-
-src/features/silver.py
-  cleaned parquet -> data/silver/market_data_clean.parquet
-
-src/features/gold.py
-  features and target -> data/gold/market_features.parquet
-
-src/models/train.py
-  RandomForestClassifier evaluation
+X-Event-Token: replace-with-shared-token
 ```
 
-This pipeline currently uses pandas, pyarrow, yfinance, and scikit-learn. It does not use PySpark.
+or:
 
-## NodeAsset Feed Contract
-
-The poller expects the NodeAsset API to provide:
-
-```http
-POST /user/login
-Content-Type: application/json
-
-{
-  "email": "customer@example.com",
-  "password": "..."
-}
+```text
+Authorization: Bearer replace-with-shared-token
 ```
 
-The login response must include one of:
-
-- `token`
-- `jwt`
-- `access_token`
-- `user.token`
-
-The subscribed trade feed is called with the returned bearer token:
-
-```http
-GET /gappers/subscribed-trades?after_id=184928&limit=100
-Authorization: Bearer <token>
-```
-
-Expected response shape:
+Sample OpenClaw event:
 
 ```json
 {
-  "user_email": "customer@example.com",
-  "count": 2,
-  "next_cursor": "184930",
-  "trades": [
-    {
-      "cursor": "184929",
-      "trade_id": "trd_03",
-      "specialist": "runner",
-      "symbol": "AAPL",
-      "side": "BUY",
-      "quantity": 10,
-      "price": 184.22,
-      "timestamp": "2026-05-11T14:34:59.000Z"
-    }
-  ]
+  "event": "nodeasset.trade.received",
+  "data": {
+    "trade_id": "664f2-example",
+    "specialist": "runner",
+    "symbol": "NVDA",
+    "side": "BUY",
+    "confidence": 0.82,
+    "price": 915.25,
+    "timestamp": "2026-05-11T14:35:00Z"
+  }
 }
 ```
 
-The poller treats the cursor as opaque. It stores the value returned by `next_cursor` and sends it as `after_id` on the next request.
+Manual test:
 
-## Configuration
-
-The poller is configured entirely through environment variables.
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `NODEASSET_API_URL` | `https://api.nodeasset.com` | Base URL for the NodeAsset API. |
-| `NODEASSET_LOGIN_PATH` | `/user/login` | Login endpoint. |
-| `NODEASSET_FEED_PATH` | `/gappers/subscribed-trades` | Subscribed trade feed endpoint. |
-| `NODEASSET_EMAIL` | empty | NodeAsset customer email. Required at runtime. |
-| `NODEASSET_PASSWORD` | empty | NodeAsset customer password. Required at runtime. |
-| `NODEASSET_POLL_SECONDS` | `5` | Delay between feed polls. |
-| `NODEASSET_LIMIT` | `100` | Maximum trades requested per poll. |
-| `NODEASSET_ONCE` | `false` | Run one poll and exit. Useful for testing. |
-| `NODEASSET_CURSOR_FILE` | `data/nodeasset_cursor.txt` | Cursor persistence file. |
-| `NODEASSET_EVENT_LOG` | `data/nodeasset_trades.log` | JSON-lines trade event log. |
-| `NODEASSET_HTTP_TIMEOUT` | `15` | HTTP timeout in seconds. |
-| `EVENT_INGEST_TOKEN` | empty | Optional bearer or `X-Event-Token` value required by OpenClaw event ingestion endpoints. |
-
-Never commit customer credentials. Pass them through the shell, CI secrets, or the deployment platform secret manager.
-
-## Docker Usage
-
-Build the poller image:
-
-```sh
-docker compose build poller
-```
-
-Run a one-shot smoke test:
-
-```sh
-NODEASSET_EMAIL='customer@example.com' \
-NODEASSET_PASSWORD='...' \
-NODEASSET_ONCE=true \
-NODEASSET_LIMIT=10 \
-docker compose run --rm poller
-```
-
-Run continuously:
-
-```sh
-NODEASSET_EMAIL='customer@example.com' \
-NODEASSET_PASSWORD='...' \
-NODEASSET_POLL_SECONDS=5 \
-docker compose up poller
-```
-
-Run the API for OpenClaw event ingestion:
-
-```sh
-EVENT_INGEST_TOKEN='shared-secret' docker compose up api
-```
-
-Send a local OpenClaw-style event:
-
-```sh
+```bash
 curl -X POST http://localhost:8000/events/openclaw/nodeasset-trade \
-  -H 'Content-Type: application/json' \
-  -H 'X-Event-Token: shared-secret' \
+  -H "Content-Type: application/json" \
+  -H "X-Event-Token: local-openclaw-token" \
   -d '{
-    "type": "nodeasset.trade.received",
+    "event": "nodeasset.trade.received",
     "data": {
-      "trade_id": "trd_01",
+      "trade_id": "local-test-1",
       "specialist": "runner",
-      "symbol": "AAPL",
+      "symbol": "NVDA",
       "side": "BUY",
-      "quantity": 10,
-      "price": 184.22,
-      "timestamp": "2026-05-11T14:34:59.000Z"
+      "confidence": 0.82,
+      "price": 915.25,
+      "timestamp": "2026-05-11T14:35:00Z"
     }
   }'
 ```
 
-## Using With nodeasset-openclaw-trader
+## Direct API Fallback
 
-The recommended OpenClaw path is:
-
-```text
-NodeAsset API
-  pushes signed nodeasset.trade.received webhook
-        |
-nodeasset-openclaw-trader
-  verifies NodeAsset signature
-  applies OpenClaw/customer routing policy
-  forwards normalized event with X-Event-Token
-        |
-Market ML Databricks
-  accepts event
-  appends nodeasset_trades.log
-  processes event for ML/analytics
-```
-
-Run this app's API:
-
-```sh
-EVENT_INGEST_TOKEN='shared-secret' docker compose up api
-```
-
-Configure `nodeasset-openclaw-trader` to forward here:
-
-```sh
-FORWARD_URL='http://host.docker.internal:8000/events/openclaw/nodeasset-trade'
-FORWARD_TOKEN='shared-secret'
-```
-
-If both projects run on the same Docker network, replace `host.docker.internal` with the service name or network alias for this API container.
-
-The shared secret must match:
+The direct handoff endpoint remains available:
 
 ```text
-nodeasset-openclaw-trader FORWARD_TOKEN
-        ==
-market-ml-databricks EVENT_INGEST_TOKEN
+POST /events/nodeasset-trade
 ```
 
-This repo does not need NodeAsset credentials in OpenClaw push mode. NodeAsset auth, webhook signing, and optional NodeAsset pull-mode credentials live in `nodeasset-openclaw-trader`.
+It runs the same reasoning path and persistence as the OpenClaw endpoint, but it removes the local OpenClaw agent boundary. Use this mainly for internal tests, simple server-to-server integrations, or customers that only need deterministic sizing output from raw subscribed trades.
 
-Stop services and remove the Compose network:
+The older direct poller service is still included:
 
-```sh
-docker compose down
-```
-
-## Docker Images and Dependencies
-
-The poller uses a dedicated lightweight dependency file:
-
-```text
-requirements-poller.txt
-```
-
-It intentionally installs only:
-
-- `requests`
-- `python-dotenv`
-
-The broader `requirements.txt` supports the API and local ML pipeline. PySpark and py4j are intentionally not included because this application does not import Spark APIs or run Spark jobs.
-
-## Data Files
-
-The poller writes operational state under `data/` by default:
-
-```text
-data/nodeasset_cursor.txt
-data/nodeasset_trades.log
-```
-
-`nodeasset_cursor.txt` lets the poller resume without replaying old trades.
-
-`nodeasset_trades.log` is append-only JSON lines. It is the handoff point for downstream processors.
-
-Example downstream reader:
-
-```python
-import json
-
-with open("data/nodeasset_trades.log") as f:
-    for line in f:
-        trade = json.loads(line)
-        print(trade["specialist"], trade["symbol"], trade["side"])
-```
-
-## Commercial Behavior
-
-For a customer using the full NodeAsset product:
-
-1. The customer logs into NodeAsset Terminal.
-2. On Settings, the customer selects active specialists such as `runner` or `ignition`.
-3. NodeAsset records the subscription by authenticated email.
-4. When those specialists generate trades, NodeAsset projects visibility into that customer's subscription window.
-5. Either this poller logs in as the same customer, or `nodeasset-openclaw-trader` receives/forwards normalized trade events here.
-6. The customer receives only subscribed trades.
-7. The customer's local event log becomes the integration point for proprietary analysis, automation, dashboards, or ML workflows.
-
-The customer should not see trades for unsubscribed specialists, expired subscription windows, other customers, or internal agent-only views.
-
-## Direct Pull vs OpenClaw Push
-
-Use direct pull when:
-
-- The customer wants the simplest deployment.
-- This repo is allowed to hold NodeAsset credentials.
-- Cursor ownership belongs to this app.
-- The output is mainly analytics or ML processing.
-
-Use OpenClaw push when:
-
-- The customer wants an agent runtime to mediate trade handling.
-- NodeAsset webhook verification and optional pull credentials should live with `nodeasset-openclaw-trader`.
-- The agent needs to reason, filter, annotate, alert, or route before the ML app stores the event.
-- Multiple downstream consumers should receive the same NodeAsset event.
-
-Both paths write the same normalized JSON-lines event format, so downstream processing does not need to care which integration mode produced the event.
-
-## Deployment Notes
-
-The repository includes Azure Container App infrastructure under `infra/envs/dev`. The existing GitHub workflow builds and deploys the poller container image to Azure Container Registry and updates the `poller-service` container app.
-
-Before deploying for a real customer:
-
-- Store `NODEASSET_EMAIL` and `NODEASSET_PASSWORD` as secrets.
-- If using `nodeasset-openclaw-trader`, store `EVENT_INGEST_TOKEN` here and configure the same value as `FORWARD_TOKEN` in `nodeasset-openclaw-trader`.
-- Confirm `NODEASSET_API_URL` points to the environment where `/gappers/subscribed-trades` is deployed.
-- Mount or persist the cursor file if replay protection must survive container replacement.
-- Ship `nodeasset_trades.log` to durable storage or replace the file writer with a queue/database sink.
-- Monitor container logs for `status:error` messages.
-
-## Local Verification Status
-
-The current Docker poller path has been tested with Docker Compose:
-
-```text
-docker compose build poller
+```bash
 docker compose run --rm poller
 ```
 
-The test completed successfully against the NodeAsset API and returned:
+The poller reads from NodeAsset's subscribed-trades API and appends normalized records to `data/nodeasset_trades.log`. It does not replace the preferred OpenClaw path.
+
+## Local Docker Run
+
+Start PostgreSQL and the API:
+
+```bash
+docker compose up --build api
+```
+
+Health check:
+
+```bash
+curl http://localhost:8000/
+```
+
+Expected:
 
 ```json
-{"status":"ok","count":0,"next_cursor":null}
+{
+  "status": "running",
+  "default_mode": "openclaw",
+  "recommended_ingest": "/events/openclaw/nodeasset-trade",
+  "fallback_ingest": "/events/nodeasset-trade"
+}
 ```
 
-That means the Docker execution environment is valid and the feed is reachable. A count of zero simply means no subscribed trades were available for that user at that cursor when the test ran.
-
-## Repository Map
+Default local values in `docker-compose.yml`:
 
 ```text
-docker-compose.yml              Compose services for api and poller
-docker/Dockerfile.poller        Lightweight NodeAsset poller image
-docker/Dockerfile.api           FastAPI image
-requirements-poller.txt         Runtime deps for the poller
-requirements.txt                API and local ML pipeline deps
-src/services/poller.py          NodeAsset subscribed trade listener
-src/services/trade_events.py    Shared event normalization and JSON-lines writer
-src/api/main.py                 FastAPI health and pipeline trigger
-src/ingestion/market_data.py    yfinance ingestion
-src/features/bronze.py          Bronze parquet stage
-src/features/silver.py          Silver cleaning stage
-src/features/gold.py            Gold feature stage
-src/models/train.py             Random forest model training
-infra/envs/dev                  Azure infrastructure
+EVENT_INGEST_TOKEN=local-openclaw-token
+NODEASSET_DEFAULT_CONFIDENCE=0.82
+NODEASSET_DEFAULT_LIQUIDITY_SCORE=0.75
+NODEASSET_DEFAULT_TIMING_SCORE=0.75
+NODEASSET_OPENCLAW_ACTION_THRESHOLD=0.70
+NODEASSET_EVENT_LOG=data/nodeasset_trades.log
+NODEASSET_REASONED_EVENT_LOG=data/nodeasset_openclaw_reasoned.log
 ```
 
-## Roadmap
+## Persistence
 
-Recommended next product steps:
+PostgreSQL stores the reasoned outputs:
 
-- Replace the local JSON-lines event log with a pluggable sink interface.
-- Add sinks for Azure Event Hubs, Kafka, S3/ADLS, Postgres, or Databricks Delta.
-- Add idempotency checks by `trade_id` in addition to cursor tracking.
-- Add structured metrics for poll latency, received trade count, and API errors.
-- Add a customer-facing sample dashboard fed by `nodeasset_trades.log`.
-- Add integration tests using a mocked NodeAsset API response.
+- `signal_events`: normalized NodeAsset specialist signal plus final action.
+- `consensus_events`: confidence score, final side, reason, and timestamp.
+- `market_candles`: symbol candle history used for regime detection.
+- `agent_performance`: feedback records used by adaptive weighting work.
+
+JSON-lines logs are also written for lightweight local processing:
+
+- `data/nodeasset_trades.log`: raw normalized events from OpenClaw or direct ingestion.
+- `data/nodeasset_openclaw_reasoned.log`: normalized events after reasoning.
+
+## Commercial System Fit
+
+This repo is an example customer-side integration for NodeAsset. It demonstrates:
+
+- Recommended: NodeAsset API -> `nodeasset-openclaw-trader` -> Market ML Databricks.
+- Fallback: NodeAsset API -> Market ML Databricks direct endpoint.
+- Legacy fallback: NodeAsset API -> local poller -> JSONL event log.
+
+The recommended OpenClaw path lets the customer keep reasoning local. NodeAsset supplies subscribed specialist trades. OpenClaw gives the customer an agent surface for context, tools, market data, risk rules, portfolio state, compliance checks, and explanations. Market ML Databricks persists and evaluates the resulting decisions.
+
+This keeps NodeAsset's source of truth compact: trades remain global, subscriptions determine entitlement, and customer-side systems own downstream interpretation.
+
+## Spark Note
+
+This application does not currently use PySpark in the API, OpenClaw event path, direct poller, or reasoning layer. Spark dependencies are intentionally not installed in the local Docker runtime. If a future Databricks job needs Spark, add it to a separate Databricks job or job-specific image instead of the local API container.

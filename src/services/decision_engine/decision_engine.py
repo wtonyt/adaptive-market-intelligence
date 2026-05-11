@@ -15,6 +15,14 @@ from src.services.decision_engine.governance_engine import (
     GovernanceEngine
 )
 
+from src.services.decision_engine.news_intelligence_engine import (
+    NewsIntelligenceEngine
+)
+
+from src.services.decision_engine.alternative_data_engine import (
+    AlternativeDataEngine
+)
+
 
 class DecisionEngine:
 
@@ -35,6 +43,14 @@ class DecisionEngine:
             GovernanceEngine()
         )
 
+        news_engine = (
+            NewsIntelligenceEngine()
+        )
+
+        alternative_engine = (
+            AlternativeDataEngine()
+        )
+
         # Confidence evaluation
         confidence_data = (
             confidence_engine.calculate(
@@ -49,26 +65,71 @@ class DecisionEngine:
             )
         )
 
-        confidence = confidence_data[
-            "confidence"
-        ]
+        # News evaluation
+        news_data = (
+            news_engine.evaluate(
+                context
+            )
+        )
 
-        risk_score = risk_data[
-            "risk_score"
-        ]
+        # Alternative data evaluation
+        alternative_data = (
+            alternative_engine.evaluate(
+                context
+            )
+        )
 
-        reasons = confidence_data[
-            "reasons"
-        ]
+        # Final confidence calculation
+        confidence = (
 
+            confidence_data["confidence"]
+
+            + news_data[
+                "sentiment_adjustment"
+            ]
+
+            + alternative_data[
+                "alternative_adjustment"
+            ]
+        )
+
+        confidence = min(
+            round(confidence, 2),
+            1.0
+        )
+
+        # Risk score
+        risk_score = (
+
+            risk_data["risk_score"]
+
+            + news_data[
+                "risk_adjustment"
+            ]
+        )
+
+        risk_score = min(
+            round(risk_score, 2),
+            1.0
+        )
+
+        # Reasons
+        reasons = (
+            confidence_data["reasons"]
+
+            + news_data["news_factors"]
+
+            + alternative_data[
+                "alternative_factors"
+            ]
+        )
+
+        # Blockers
         blockers = (
-            confidence_data[
-                "blockers"
-            ]
-            +
-            risk_data[
-                "risk_factors"
-            ]
+
+            confidence_data["blockers"]
+
+            + risk_data["risk_factors"]
         )
 
         # Governance evaluation

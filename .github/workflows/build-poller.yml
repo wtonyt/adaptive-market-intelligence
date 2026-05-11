@@ -35,37 +35,55 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Start API
+      - name: Initialize test database
+        env:
+          TEST_MODE: "true"
+          ALPACA_API_KEY: "test"
+          ALPACA_SECRET_KEY: "test"
+          OPENAI_API_KEY: "test"
         run: |
+          set -e
           source .venv/bin/activate
+          python -m src.db.init_db
 
-          TEST_MODE=true \
+      - name: Start API
+        env:
+          TEST_MODE: "true"
+          ALPACA_API_KEY: "test"
+          ALPACA_SECRET_KEY: "test"
+          OPENAI_API_KEY: "test"
+          EVENT_INGEST_TOKEN: "local-openclaw-token"
+        run: |
+          set -e
+          source .venv/bin/activate
           uvicorn src.api.main:app \
             --host 127.0.0.1 \
             --port 8000 \
             > api.log 2>&1 &
-
           sleep 5
-
           cat api.log
 
       - name: Wait for API
         run: |
+          set -e
           for i in {1..10}; do
             if curl -f http://127.0.0.1:8000/; then
               exit 0
             fi
-
             echo "Waiting for API..."
             sleep 2
           done
-
           echo "API failed to start"
+          cat api.log
           exit 1
 
       - name: Run tests
         env:
-          TEST_MODE: true
+          TEST_MODE: "true"
+          ALPACA_API_KEY: "test"
+          ALPACA_SECRET_KEY: "test"
+          OPENAI_API_KEY: "test"
+          EVENT_INGEST_TOKEN: "local-openclaw-token"
         run: |
           set -e
           source .venv/bin/activate
@@ -91,8 +109,7 @@ jobs:
       - name: Push Docker image
         run: |
           set -e
-          docker push \
-            marketmlacr123.azurecr.io/poller-service:${{ env.IMAGE_TAG }}
+          docker push marketmlacr123.azurecr.io/poller-service:${{ env.IMAGE_TAG }}
 
       - name: Deploy Poller Container App
         run: |

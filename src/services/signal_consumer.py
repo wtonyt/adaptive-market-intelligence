@@ -1,9 +1,19 @@
 import os
 import json
-from src.db.crud import save_signal_event
-from src.schemas.events import SignalEvent
+
 from azure.servicebus import ServiceBusClient
 from dotenv import load_dotenv
+
+from src.db.crud import save_signal_event
+from src.schemas.events import SignalEvent
+from src.db.crud_decision import save_decision_result
+from src.services.decision_engine.context_builder import (
+    build_signal_context
+)
+
+from src.services.decision_engine.decision_engine import (
+    DecisionEngine
+)
 
 load_dotenv()
 
@@ -16,15 +26,32 @@ def process_signal(message_data):
     signal = message_data.get("signal", {})
     action = message_data.get("action")
 
-    print("\n--- DECISION ENGINE ---", flush=True)
-    print(f"Ticker: {signal.get('ticker')}", flush=True)
-    print(f"Signal: {signal.get('signal')}", flush=True)
-    print(f"Confidence: {signal.get('confidence')}", flush=True)
-    print(f"Action: {action}", flush=True)
+    # Build intelligence context
+    context = build_signal_context(message_data)
 
+    # Run decision engine
+    engine = DecisionEngine()
+
+    decision = engine.evaluate(context)
+
+    print("\n--- INTELLIGENCE LAYER ---", flush=True)
+
+    print(f"Ticker: {decision.symbol}", flush=True)
+    print(f"Action: {decision.action}", flush=True)
+    print(f"Approved: {decision.approved}", flush=True)
+    print(f"Confidence: {decision.confidence}", flush=True)
+    print(f"Risk: {decision.risk_score}", flush=True)
+
+    print(f"Reasons: {decision.reasons}", flush=True)
+    print(f"Blockers: {decision.blockers}", flush=True)
+
+    # Persist original signal event
     save_signal_event(message_data)
-
-    # Future ML inference goes HERE
+    save_decision_result(decision)
+    # Future:
+    # save_decision_result(decision)
+    # execute_trade(decision)
+    # trigger_gpt_reasoning(decision)
 
 
 def consume_messages():

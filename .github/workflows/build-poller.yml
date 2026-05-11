@@ -37,11 +37,17 @@ jobs:
 
       - name: Start API
         run: |
-          set -e
           source .venv/bin/activate
-          TEST_MODE=true uvicorn src.api.main:app \
+
+          TEST_MODE=true \
+          uvicorn src.api.main:app \
             --host 127.0.0.1 \
-            --port 8000 &
+            --port 8000 \
+            > api.log 2>&1 &
+
+          sleep 5
+
+          cat api.log
 
       - name: Wait for API
         run: |

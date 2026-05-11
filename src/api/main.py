@@ -24,6 +24,9 @@ app = FastAPI(
     title="Market ML Trading Platform",
     version="1.0.0"
 )
+from src.schemas.copilot_request import (
+    CoPilotRequest
+)
 
 @app.get("/")
 def health_check():
@@ -175,7 +178,7 @@ def test_approve(trade_id: str):
 )
 def copilot_analysis(
 
-    payload: dict = Body(...),
+    payload: CoPilotRequest,
 
     x_event_token: str = Header(
         default=None
@@ -194,9 +197,8 @@ def copilot_analysis(
             detail="Invalid token"
         )
 
-    trade_data = payload.get(
-        "data",
-        {}
+    trade_data = (
+        payload.data.model_dump()
     )
 
     copilot_service = (

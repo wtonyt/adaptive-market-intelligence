@@ -1,16 +1,22 @@
 # Use lightweight Python image
 FROM python:3.9-slim
 
+# Prevent Python buffering
+ENV PYTHONUNBUFFERED=1
+
 # Set working directory
 WORKDIR /app
 
-# Copy project files
-COPY . .
+# Copy dependency file first
+COPY requirements.txt .
 
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose port
+# Copy application code
+COPY . .
+
+# Expose FastAPI port
 EXPOSE 8000
 
 # Start API

@@ -1,5 +1,5 @@
 import os
-
+from src.db.database import Base, engine
 from fastapi import (
     Header,
     HTTPException
@@ -24,6 +24,7 @@ app = FastAPI(
     title="Market ML Trading Platform",
     version="1.0.0"
 )
+Base.metadata.create_all(bind=engine)
 from src.schemas.copilot_request import (
     CoPilotRequest
 )

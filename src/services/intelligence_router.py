@@ -1,3 +1,4 @@
+from src.config.settings import settings
 from src.services.decision_engine.news_intelligence_engine import (
     NewsIntelligenceEngine
 )
@@ -141,7 +142,7 @@ class IntelligenceRouter:
                 f"{decision.blockers}"
             )
 
-            if decision.approved:
+            if decision.approved and not settings.TEST_MODE:
 
                 print(
                     "\nRouting approved trade "

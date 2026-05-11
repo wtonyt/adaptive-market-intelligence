@@ -87,7 +87,7 @@ jobs:
         run: |
           set -e
           source .venv/bin/activate
-          pytest
+          pytest -vv -s --maxfail=1
 
       - name: Log in to Azure
         uses: azure/login@v2

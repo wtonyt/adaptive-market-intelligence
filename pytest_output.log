@@ -1,0 +1,233 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.9.6, pytest-8.4.2, pluggy-1.6.0 -- /Users/tony/projects/market-ml-databricks/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/tony/projects/market-ml-databricks
+configfile: pyproject.toml
+plugins: anyio-4.12.1
+collecting ... Saved narrative event
+{
+  "trade_id": "TEST123",
+  "symbol": "CUE",
+  "action": "ENTER_LONG",
+  "confidence": 0.98,
+  "risk_score": 0.1,
+  "approved": true,
+  "reasons": [
+    "Strong upstream signal score",
+    "Volume is significantly above normal",
+    "Price is above VWAP",
+    "Market regime supports trade: momentum",
+    "GENERAL: Watching Cue Biopharma; Fugazi Research Issues Report On Co. Titled \"$CUE: Reverse Splits, PIPE Dilution, and the Illusion of Recovery\"",
+    "Bullish politician trade activity",
+    "AI bullish narrative regime detected"
+  ],
+  "blockers": []
+}
+Saved narrative event
+Saved narrative event
+Saved narrative event
+
+--- COPILOT ANALYSIS ---
+
+{'trade_id': 'trd_001', 'actionability': 'strong_watch', 'summary': 'BUY signal on NVDA is classified as strong_watch. Narrative regime is AI_BULLISH_REGIME.', 'confidence_score': 0.86, 'reasons': ['Strong upstream signal score', 'Volume is moderately elevated', 'Price is above VWAP', 'Market regime supports trade: momentum', "GENERAL: Trump Says Xi Will Give Him A 'Big, Fat Hug' In China, But What Do Prediction Markets Expect?", "GENERAL: Chamath Palihapitiya Says Anthropic Deal Has A Lesson For Elon Musk's $2T SpaceX IPO", "AI_THEME: Elon Musk Joins Trump's China Trip — Nvidia CEO Jensen Huang Not Invited", 'Bullish politician trade activity', 'AI bullish narrative regime detected'], 'risks': [], 'questions': ['Is the trade still near the original entry price?', 'Has volume remained elevated since signal generation?', 'Does current market momentum still support the setup?']}
+{
+  "event_type": "NEWS_EVENT",
+  "symbol": "AAPL",
+  "source": "alpaca_news",
+  "timestamp": "2026-05-11T22:28:26.304767",
+  "payload": {
+    "headline": "Apple surges after bullish AI outlook",
+    "sentiment": "BULLISH",
+    "confidence_adjustment": 0.05,
+    "risk_adjustment": 0.0
+  }
+}
+
+Trade success associated with AI_BULLISH_REGIME
+
+Trade failure associated with MACRO_RISK_REGIME
+Saved narrative event
+Saved narrative event
+Saved narrative event
+Saved narrative event
+
+--- CURRENT NARRATIVE REGIME ---
+
+AI_BULLISH_REGIME
+
+--- NARRATIVE MEMORY ---
+
+{'AI_THEME': 2, 'BUFFETT_THEME': 1}
+
+--- NARRATIVE REGIME ---
+
+AI_BULLISH_REGIME
+
+--- RETRIEVED NARRATIVE SUMMARY ---
+
+{'AI_THEME': 16, 'GENERAL': 34}
+
+--- CLASSIFICATION ---
+
+{'event_type': 'BULLISH_EVENT', 'sentiment': 'BULLISH', 'confidence_adjustment': 0.05, 'risk_adjustment': 0.0}
+
+--- NEWS ---
+
+Headline: Trump Says Xi Will Give Him A 'Big, Fat Hug' In China, But What Do Prediction Markets Expect?
+Summary: Trump promises a &#39;big, fat hug&#39; from Xi when he lands in Beijing Thursday. Analysts say to expect Boeings, beans and not much else.
+Symbols: ['AAPL', 'BA', 'CVX', 'NVDA', 'SOXX', 'USO', 'XOM']
+Source: benzinga
+---
+Headline: Elon Musk Joins Trump's China Trip — Nvidia CEO Jensen Huang Not Invited
+Summary: Reuters reports Elon Musk and Tim Cook will join Trump on his China trip, while Nvidia&#39;s Jensen Huang was not invited.
+Symbols: ['AAPL', 'BA', 'BLK', 'BX', 'CSCO', 'GE', 'MA', 'MU', 'NVDA', 'QCOM', 'TSLA', 'V']
+Source: benzinga
+---
+Headline: CORRECTION: Google Announces End-To-End encrypted RCS Messaging Begins Rolling Out Today For Android And iPhone Users
+Summary: 
+Symbols: ['AAPL', 'GOOG', 'GOOGL']
+Source: benzinga
+---
+Headline: Apple Announces End-To-End Encrypted RCS Messaging Begins Rolling Out Today In Beta
+Summary: 
+Symbols: ['AAPL']
+Source: benzinga
+---
+Headline: Micron Benefits From Samsung Trouble; Buying Mania Hampered by Rising Oil
+Summary: 
+
+
+
+Semi Mania
+
+
+
+Please click here for an enlarged chart of Micron Technology Inc 
+Symbols: ['AAPL', 'AMZN', 'BTCUSD', 'GLD', 'GOOG', 'META', 'MSFT', 'MU', 'NVDA', 'QQQ', 'SLV', 'SPY', 'SSNLF', 'TSLA', 'USO']
+Source: benzinga
+---
+
+--- PERFORMANCE ANALYSIS ---
+Total Trades: 1
+Overall Win Rate: 100.0%
+HIGH confidence win rate: 100.0%
+
+--- GPT REFLECTION ---
+
+1. **Assessment of decision quality**
+
+- The trade outcome (≈+13.4% in 22 minutes) strongly validates the **directional call** and **timing** for this instance.  
+- Inputs used—momentum regime, above‑VWAP price, abnormal volume, and specialized signals (upstream score, “politician trade” flow, leadership regime)—are all structurally aligned with a **short-term momentum breakout** framework.  
+- No blockers and a low risk score (0.1) are consistent with a “green‑light” setup; in this case, the realized result supports that.  
+- From a process standpoint, the decision is **high quality for a momentum-based intraday system**, but this cannot yet be generalized as high quality *in expectation* without a larger sample of similar trades.
+
+2. **Whether confidence was calibrated correctly**
+
+- Reported confidence: **0.96** (i.e., 96% conviction the trade is correct / will be profitable, depending on system definition).  
+- A 96% confidence level would normally imply:
+  - Extremely high historical win rate for this signal configuration (e.g., >80–90%+), **or**
+  - An exceptional outlier scenario with overwhelming signal strength vs. noise.
+- With only one instance, we can’t statistically validate calibration. However, from a **realistic trading perspective**, a 0.96 confidence level for a directional intraday equity trade is almost certainly **overconfident**, even when the trade wins:
+  - Equity intraday momentum setups rarely justify such high ex‑ante probabilities of success.
+  - A 13% move in 22 minutes suggests a **high-volatility payoff**, not an almost-certain small edge. High volatility rarely pairs with 96% win probability.
+- Conclusion: The trade result was good, but the **confidence was likely mis-calibrated on the high side** relative to what a rational probabilistic model should assign.
+
+3. **Key strengths in reasoning**
+
+- **Multi-factor momentum alignment**  
+  - “Strong upstream signal score” + “Market regime supports trade: momentum” + “Price is above VWAP” + “Volume is significantly above normal” all point in the same direction: **trend-following, pro-momentum** entry.
+  - Above VWAP + high volume is a classic confirmation that **active demand is dominating** and that the move is institutionally supported or at least not purely retail-driven noise.
+
+- **Regime awareness**  
+  - Explicit mention of “Market regime supports trade: momentum” and “Leadership confidence regime detected” suggests:
+    - The system is not trading the signal in isolation.
+    - It is conditioning entries on a **broader regime filter**, which is a critical edge in systematic trading (momentum works much better in certain volatility/liquidity regimes than others).
+
+- **Alternative data / flow-based reasoning**  
+  - “Bullish politician trade activity” brings in **non-standard alpha** (policy / information edge proxies).
+  - As long as this factor has been historically validated, it can diversify the signal set away from pure price/volume.
+
+- **Risk acknowledgement**  
+  - “Risk Score: 0.1” and no blockers: the system is at least **attempting to quantify risk** rather than acting on raw signal strength alone, which is structurally sound.
+
+4. **Key weaknesses in reasoning**
+
+- **Overconfidence vs. inherent uncertainty**  
+  - Confidence at 0.96 with such a short-term, high-volatility move implies the system may be:
+    - Over-fitting historical patterns, or
+    - Treating correlation as near-certainty.
+  - This is dangerous for downside management: a few adverse outliers in similarly “96%” trades could cause large drawdowns if sizing is tied to this confidence.
+
+- **Lack of explicit risk/exit logic in the reasoning**  
+  - The reasoning focuses purely on **entry justification** (signals, regime, flows), but says nothing about:
+    - Expected volatility or typical adverse excursion.
+    - Stop placement logic.
+    - Target/exit framework (e.g., multiple of ATR, VWAP reversion, time-based exit).
+  - The outcome data (22-minute hold) might have been time-based or signal-based, but the reasoning chain doesn’t explain it, which impairs **post-trade diagnosis** and robust risk control.
+
+- **Opaque “upstream signal score” and “leadership confidence regime”**  
+  - These phrases indicate complex composite indicators, but:
+    - There is no breakdown of which sub-signals drove the score.
+    - This can hide **correlation clustering** (e.g., multiple “different” signals all derived from price/volume).
+  - If they are largely overlapping with “volume above normal” and “price above VWAP,” then the model may be **double-counting similar information**, inflating confidence.
+
+- **Politician activity context not specified**  
+  - “Bullish politician trade activity” is treated as unconditionally positive. Missing context:
+    - Lag between their trades and public disclosure.
+    - Size vs. float and normal turnover.
+    - Historical hit-rate for **this specific ticker** or this sector with similar activity.
+  - Without this, it risks being a **narrative enhancer** of confidence rather than a rigorously weighted factor.
+
+5. **Suggestions for future improvements**
+
+- **Recalibrate confidence scores with empirical distributions**
+  - Use a large historical set of trades with similar:
+    - Upstream signal scores.
+    - Volume anomaly magnitude.
+    - VWAP relationship.
+    - Regime classifications.
+  - Estimate **empirical win rate and payoff distribution** for that cluster, and constrain confidence so that:
+    - A 0.96 confidence would only be used if realized win rates are persistently in that range (which is unlikely).
+    - More typical high-quality setups might be in the 0.60–0.80 range, with explicit uncertainty bands.
+
+- **Decompose and de-correlate signals**
+  - Break out “Strong upstream signal score” and “Leadership confidence regime” into:
+    - Clear factor components (e.g., short-term momentum, relative strength vs. sector, liquidity regime, dispersion).
+  - Run **correlation and feature importance analysis** to:
+    - Avoid double-counting highly correlated features.
+    - Reduce the chance that the model assigns multiple independent “votes” to essentially the same underlying dynamic.
+
+- **Integrate explicit risk/exit logic into the reasoning output**
+  - For each trade, reasoning should also include:
+    - “Expected volatility / typical drawdown for similar setups.”
+    - “Planned stop loss level and rationale” (e.g., under VWAP, X% below entry, below prior support).
+    - “Exit rule or condition” that explains why this was a 22-minute hold (time-based, signal decay, target hit, etc.).
+  - This improves **discipline and auditability** and helps detect when exits deviate from plan.
+
+- **Quantify the contribution of politician-trade signals**
+  - Treat “Bullish politician trade activity” as a **quantified factor**:
+    - Maintain stats on its standalone and conditional alpha (incremental edge when combined with momentum/volume/VWAP).
+    - Adjust its weight based on realized performance rather than treating it as a categorical boost.
+  - If its marginal contribution is weak or inconsistent, reduce its impact on confidence rather than letting it push trades into 0.9+ confidence bands.
+
+- **Introduce calibrated uncertainty bands rather than point confidence**
+  - Instead of a single 0.96, express:
+    - A central probability estimate (e.g., 0.72).
+    - A confidence interval (e.g., 0.60–0.82 based on data scarcity, regime variance).
+  - This improves **position sizing** and makes it less likely to oversize “sure thing” trades in structurally noisy environments.
+
+- **Post-trade attribution and clustering**
+  - Cluster this trade with similar historical trades (same factor combo: strong momentum regime, above VWAP, high volume, politician flow) and:
+    - Evaluate average PnL, variance, skew, and tail risk.
+    - Determine if this trade’s +13.4% is typical or an outlier.
+  - Use that to:
+    - Adjust **expected return assumptions** for similar setups.
+    - Possibly implement **profit-taking rules** (e.g., scale out when move exceeds historical 90th percentile intraday gain for the pattern).
+
+In summary: the reasoning is structurally aligned with a sound momentum/regime framework and produced an excellent outcome, but the **numerical confidence is almost certainly over-calibrated**. Future improvements should focus on empirical calibration of probabilities, better decomposition of signals, and explicit incorporation of risk and exit logic into the decision narrative.
+
+--- REGIME PERFORMANCE ---
+
+{'AI_BULLISH_REGIME': {'wins': 2, 'losses': 1, 'win_rate': 0.67}, 'MACRO_RISK_REGIME': {'wins': 0, 'losses': 1, 'win_rate': 0.0}}
+['TAKE_PROFIT']
+Saved trade outcome

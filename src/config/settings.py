@@ -81,5 +81,12 @@ class Settings:
         "ALPACA_SECRET_KEY"
     )
 
+    TEST_MODE = (
+        os.getenv(
+            "TEST_MODE",
+            "false"
+        ).lower() == "true"
+    )
+
 
 settings = Settings()

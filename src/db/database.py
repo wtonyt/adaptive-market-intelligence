@@ -7,18 +7,33 @@ from sqlalchemy.orm import (
 from src.config.settings import settings
 
 
-DATABASE_URL = (
-    f"postgresql://"
-    f"{settings.POSTGRES_USER}:"
-    f"{settings.POSTGRES_PASSWORD}@"
-    f"{settings.POSTGRES_HOST}:"
-    f"{settings.POSTGRES_PORT}/"
-    f"{settings.POSTGRES_DB}"
-)
+if settings.TEST_MODE:
+
+    DATABASE_URL = (
+        "sqlite:///./test.db"
+    )
+
+else:
+
+    DATABASE_URL = (
+        f"postgresql://"
+        f"{settings.POSTGRES_USER}:"
+        f"{settings.POSTGRES_PASSWORD}@"
+        f"{settings.POSTGRES_HOST}:"
+        f"{settings.POSTGRES_PORT}/"
+        f"{settings.POSTGRES_DB}"
+    )
 
 
 engine = create_engine(
-    DATABASE_URL
+
+    DATABASE_URL,
+
+    connect_args={
+        "check_same_thread": False
+    }
+    if settings.TEST_MODE
+    else {}
 )
 
 

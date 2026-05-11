@@ -1,3 +1,13 @@
+import os
+
+from fastapi import (
+    Header,
+    HTTPException
+)
+
+from src.services.copilot.copilot_analysis_service import (
+    CoPilotAnalysisService
+)
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, Body
@@ -15,6 +25,9 @@ app = FastAPI(
     version="1.0.0"
 )
 
+copilot_service = (
+    CoPilotAnalysisService()
+)
 
 @app.get("/")
 def health_check():
@@ -159,4 +172,50 @@ def test_approve(trade_id: str):
     return {
         "status": "approved",
         "trade_id": trade_id
+    }
+
+@app.post(
+    "/events/openclaw/copilot-analysis"
+)
+def copilot_analysis(
+
+    payload: dict = Body(...),
+
+    x_event_token: str = Header(
+        default=None
+    )
+):
+
+    expected_token = os.getenv(
+        "EVENT_INGEST_TOKEN",
+        "local-openclaw-token"
+    )
+
+    if x_event_token != expected_token:
+
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid token"
+        )
+
+    trade_data = payload.get(
+        "data",
+        {}
+    )
+
+    analysis = (
+        copilot_service.analyze_trade(
+            trade_data
+        )
+    )
+
+    return {
+
+        "status": "ready",
+
+        "mode": "openclaw-copilot",
+
+        "callback_sent": False,
+
+        "analysis": analysis
     }

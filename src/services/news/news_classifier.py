@@ -61,7 +61,7 @@ class NewsClassifier:
 
             risk_adjustment = 0.15
 
-        # Macro risk
+        # Macro narratives
         elif any(keyword in headline_lower for keyword in [
 
             "inflation",
@@ -77,6 +77,53 @@ class NewsClassifier:
             sentiment = "CAUTION"
 
             risk_adjustment = 0.10
+
+        # AI / technology narratives
+        elif any(keyword in headline_lower for keyword in [
+
+            "ai",
+            "artificial intelligence",
+            "openai",
+            "nvidia",
+            "semiconductor",
+            "machine learning"
+
+        ]):
+
+            event_type = "AI_THEME"
+
+            sentiment = "BULLISH"
+
+            confidence_adjustment = 0.03
+
+        # Buffett / Berkshire narratives
+        elif any(keyword in headline_lower for keyword in [
+
+            "buffett",
+            "berkshire"
+
+        ]):
+
+            event_type = "BUFFETT_THEME"
+
+            sentiment = "LONG_TERM_BULLISH"
+
+            confidence_adjustment = 0.02
+
+        # Executive leadership
+        elif any(keyword in headline_lower for keyword in [
+
+            "ceo",
+            "executive",
+            "leadership",
+            "tim cook",
+            "satya nadella"
+
+        ]):
+
+            event_type = "LEADERSHIP_EVENT"
+
+            sentiment = "NEUTRAL"
 
         return {
 

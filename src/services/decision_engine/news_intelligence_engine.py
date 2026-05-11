@@ -5,7 +5,9 @@ from src.services.news.news_service import (
 from src.services.news.news_classifier import (
     NewsClassifier
 )
-
+from src.services.news.narrative_intelligence_service import (
+    NarrativeIntelligenceService
+)
 
 class NewsIntelligenceEngine:
 
@@ -17,6 +19,10 @@ class NewsIntelligenceEngine:
 
         self.classifier = (
             NewsClassifier()
+        )
+
+        self.narrative_service = (
+            NarrativeIntelligenceService()
         )
 
     def evaluate(
@@ -32,9 +38,15 @@ class NewsIntelligenceEngine:
 
         try:
 
+            symbol = (
+                context.get("symbol")
+                if isinstance(context, dict)
+                else context.symbol
+            )
+
             news = (
                 self.news_service.get_news(
-                    context.symbol
+                    symbol
                 )
             )
 
@@ -53,6 +65,10 @@ class NewsIntelligenceEngine:
                     )
                 )
 
+                self.narrative_service.process_event(
+                    classification
+                )
+                
                 sentiment_adjustment += (
                     classification[
                         "confidence_adjustment"

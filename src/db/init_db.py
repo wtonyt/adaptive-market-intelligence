@@ -5,7 +5,8 @@ from src.db.models_decision import *
 from src.db.models_trade_outcome import *
 from src.utils.logger import logger
 from src.db.models_order import *
-
+from src.db.models_narrative_event import *
+from src.db.models_regime_performance import *
 
 def init_db():
 

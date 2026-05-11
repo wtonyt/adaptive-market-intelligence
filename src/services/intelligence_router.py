@@ -6,6 +6,17 @@ from src.services.decision_engine.trade_management_engine import (
     TradeManagementEngine
 )
 
+from src.services.decision_engine.context_builder import (
+    build_signal_context
+)
+
+from src.services.decision_engine.decision_engine import (
+    DecisionEngine
+)
+
+from src.services.execution.alpaca_executor import (
+    AlpacaExecutor
+)
 
 class IntelligenceRouter:
 
@@ -69,27 +80,78 @@ class IntelligenceRouter:
                 "Routing to Decision Engine"
             )
 
-            # Future:
-            # decision evaluation
-
-        elif event.event_type == "ORDER_EVENT":
-
             print(
-                "Routing to Execution Layer"
+                "\nSignal Payload:"
             )
 
-        elif event.event_type == "RISK_EVENT":
-
             print(
-                "Routing to Governance Layer"
+                event.payload
             )
 
-        else:
-
-            print(
-                "Unknown event type"
+            context = (
+                build_signal_context(
+                    event.payload
+                )
             )
 
-        print(
-            "Event routed successfully"
-        )
+            engine = (
+                DecisionEngine()
+            )
+
+            decision = (
+                engine.evaluate(
+                    context
+                )
+            )
+
+            print(
+                "\n--- LIVE DECISION ---"
+            )
+
+            print(
+                f"Symbol: {decision.symbol}"
+            )
+
+            print(
+                f"Action: {decision.action}"
+            )
+
+            print(
+                f"Confidence: "
+                f"{decision.confidence}"
+            )
+
+            print(
+                f"Risk: "
+                f"{decision.risk_score}"
+            )
+
+            print(
+                f"Approved: "
+                f"{decision.approved}"
+            )
+
+            print(
+                f"Reasons: "
+                f"{decision.reasons}"
+            )
+
+            print(
+                f"Blockers: "
+                f"{decision.blockers}"
+            )
+
+            if decision.approved:
+
+                print(
+                    "\nRouting approved trade "
+                    "to execution engine..."
+                )
+
+                execution_engine = (
+                    AlpacaExecutor()
+                )
+
+                execution_engine.execute_trade(
+                    decision
+                )

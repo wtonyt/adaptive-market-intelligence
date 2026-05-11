@@ -1,26 +1,57 @@
-from datetime import datetime
+from src.services.decision_engine.models import (
+    SignalContext
+)
 
-from src.services.decision_engine.models import SignalContext
 
-
-def build_signal_context(message_data):
-
-    signal = message_data.get("signal", {})
+def build_signal_context(
+    data
+):
 
     return SignalContext(
-        trade_id=message_data.get("trade_id", "UNKNOWN"),
-        symbol=signal.get("ticker"),
-        timestamp=datetime.utcnow(),
 
-        signal_type=signal.get("signal"),
-        signal_score=signal.get("confidence", 0.0),
+        trade_id=data.get(
+            "trade_id"
+        ),
 
-        current_price=signal.get("price", 0.0),
+        symbol=data.get(
+            "symbol"
+        ),
 
-        volume_ratio=signal.get("volume_ratio"),
-        vwap_distance=signal.get("vwap_distance"),
-        volatility_score=signal.get("volatility_score"),
-        market_regime=signal.get("market_regime"),
+        signal_type=data.get(
+            "signal_type"
+        ),
 
-        already_in_position=False
+        timestamp=data.get(
+            "timestamp"
+        ),
+
+        current_price=data.get(
+            "current_price"
+        ),
+
+        signal_score=data.get(
+            "signal_score",
+            0.0
+        ),
+
+        market_regime=data.get(
+            "market_regime"
+        ),
+
+        volume_ratio=data.get(
+            "volume_ratio"
+        ),
+
+        volatility_score=data.get(
+            "volatility_score"
+        ),
+
+        vwap_distance=data.get(
+            "vwap_distance"
+        ),
+
+        already_in_position=data.get(
+            "already_in_position",
+            False
+        )
     )

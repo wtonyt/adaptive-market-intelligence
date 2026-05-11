@@ -25,10 +25,6 @@ app = FastAPI(
     version="1.0.0"
 )
 
-copilot_service = (
-    CoPilotAnalysisService()
-)
-
 @app.get("/")
 def health_check():
 
@@ -201,6 +197,10 @@ def copilot_analysis(
     trade_data = payload.get(
         "data",
         {}
+    )
+
+    copilot_service = (
+        CoPilotAnalysisService()
     )
 
     analysis = (

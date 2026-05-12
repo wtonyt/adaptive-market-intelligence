@@ -1,6 +1,14 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, JSON
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Float,
+    DateTime,
+    JSON,
+    Boolean,
+    Text
+)
 from datetime import datetime, timezone
-from sqlalchemy import Boolean
 from src.db.database import Base
 
 
@@ -95,6 +103,32 @@ class AgentPerformance(Base):
 
     timestamp = Column(DateTime, index=True)
 
+class CopilotAnalysisRecord(Base):
+
+    __tablename__ = "copilot_analysis_records"
+
+    id = Column(String, primary_key=True)
+
+    trade_id = Column(String, index=True)
+
+    user_email = Column(String, index=True)
+
+    symbol = Column(String, index=True)
+
+    actionability = Column(String)
+
+    confidence_score = Column(Float)
+
+    summary = Column(Text)
+
+    analysis_payload = Column(JSON)
+
+    callback_url = Column(String, nullable=True)
+
+    callback_sent = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class TradeEvent(Base):
     __tablename__ = "trade_events"
 
@@ -134,4 +168,86 @@ class TradeEvent(Base):
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc)
+    )
+
+class StructuralFailureEvent(Base):
+
+    __tablename__ = "structural_failure_events"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
+
+    trade_id = Column(
+        String,
+        index=True
+    )
+
+    symbol = Column(
+        String,
+        index=True
+    )
+
+    failure_pattern = Column(
+        String,
+        index=True
+    )
+
+    severity = Column(Float)
+
+    blocked = Column(Boolean)
+
+    reasons = Column(JSON)
+
+    raw_context = Column(JSON)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc)
+    )
+
+class StructuralOutcomeEvaluation(Base):
+        
+    __tablename__ = "structural_outcome_evaluations"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
+
+    trade_id = Column(
+        String,
+        index=True
+    )
+
+    symbol = Column(
+        String,
+        index=True
+    )
+
+    failure_pattern = Column(
+        String,
+        index=True
+    )
+
+    blocked = Column(Boolean)
+
+    entry_price = Column(Float)
+
+    evaluation_price = Column(Float)
+
+    pnl_delta_pct = Column(Float)
+
+    outcome = Column(String)
+
+    correct_veto = Column(Boolean)
+
+    evaluation_notes = Column(Text)
+
+    evaluated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc)
     )

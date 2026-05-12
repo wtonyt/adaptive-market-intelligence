@@ -20,6 +20,14 @@ class CoPilotTradeData(
 
     timestamp: str
 
+    avg_liq: Optional[float] = None
+
+    min_liq: Optional[float] = None
+
+    avg_bad_p: Optional[float] = None
+
+    float_size: Optional[float] = None
+
 
 class CoPilotRequest(
     BaseModel

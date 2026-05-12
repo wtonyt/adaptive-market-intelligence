@@ -10,6 +10,12 @@ from src.services.news.narrative_intelligence_service import (
     NarrativeIntelligenceService
 )
 
+from src.services.filters.structural_failure_filter import (
+    StructuralFailureFilter
+)
+from src.db.crud_structural_failure import (
+    save_structural_failure_event
+)
 
 class CoPilotAnalysisService:
 
@@ -21,6 +27,10 @@ class CoPilotAnalysisService:
 
         self.narrative_service = (
             NarrativeIntelligenceService()
+        )
+
+        self.structural_filter = (
+            StructuralFailureFilter()
         )
 
     def analyze_trade(
@@ -74,6 +84,12 @@ class CoPilotAnalysisService:
             .get_current_regime()
         )
 
+        structural_analysis = (
+            self.structural_filter.evaluate(
+                trade_data
+            )
+        )
+
         actionability = (
             "strong_watch"
             if decision.confidence >= 0.85
@@ -90,6 +106,76 @@ class CoPilotAnalysisService:
             f"{narrative_regime}."
         )
 
+        reasons = list(
+            decision.reasons
+        )
+
+        risks = list(
+            decision.blockers
+        )
+
+        # -----------------------------------
+        # Structural failure override
+        # -----------------------------------
+
+        if structural_analysis["blocked"]:
+
+            actionability = "avoid"
+
+            reasons.extend(
+                structural_analysis[
+                    "reasons"
+                ]
+            )
+
+            risks.append(
+                structural_analysis[
+                    "failure_pattern"
+                ]
+            )
+
+            summary += (
+                " Structural failure "
+                "patterns detected."
+            )
+
+            save_structural_failure_event(
+
+                trade_id=trade_data[
+                    "trade_id"
+                ],
+
+                symbol=trade_data[
+                    "symbol"
+                ],
+
+                failure_pattern=(
+                    structural_analysis[
+                        "failure_pattern"
+                    ]
+                ),
+
+                severity=(
+                    structural_analysis[
+                        "severity"
+                    ]
+                ),
+
+                blocked=(
+                    structural_analysis[
+                        "blocked"
+                    ]
+                ),
+
+                reasons=(
+                    structural_analysis[
+                        "reasons"
+                    ]
+                ),
+
+                raw_context=trade_data
+            )
+        
         questions = [
 
             "Is the trade still near the original entry price?",
@@ -116,11 +202,14 @@ class CoPilotAnalysisService:
                 decision.confidence,
 
             "reasons":
-                decision.reasons,
+                reasons,
 
             "risks":
-                decision.blockers,
+                risks,
 
             "questions":
-                questions
+                questions,
+
+            "structural_analysis":
+                structural_analysis
         }

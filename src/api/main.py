@@ -39,9 +39,33 @@ from src.services.poller import (
     poll_once,
     NodeAssetClient
 )
-
+from src.db.crud_copilot_analysis import (
+    save_copilot_analysis
+)
 from src.utils.logger import logger
+from src.db.crud_copilot_query import (
 
+    get_recent_copilot_analyses,
+
+    get_copilot_analysis_by_trade_id
+)
+from src.db.crud_structural_query import (
+
+    get_recent_structural_failures,
+
+    get_failures_by_pattern
+)
+from src.db.crud_structural_outcome_query import (
+
+    get_recent_structural_outcomes,
+
+    get_structural_outcomes_by_pattern,
+
+    get_structural_pattern_accuracy
+)
+from src.db.crud_structural_outcome import (
+    save_structural_outcome_evaluation
+)
 
 app = FastAPI(
     title="Market ML Trading Platform",
@@ -181,6 +205,279 @@ def metrics():
 
         db.close()
 
+@app.get("/copilot/analyses/recent")
+def recent_copilot_analyses(
+    limit: int = 25
+):
+
+    records = (
+        get_recent_copilot_analyses(limit)
+    )
+
+    return [
+
+        {
+            "trade_id": r.trade_id,
+            "symbol": r.symbol,
+            "user_email": r.user_email,
+            "actionability": r.actionability,
+            "confidence_score": r.confidence_score,
+            "summary": r.summary,
+            "callback_sent": r.callback_sent,
+            "created_at": r.created_at
+        }
+
+        for r in records
+    ]
+
+@app.get(
+    "/copilot/analysis/{trade_id}"
+)
+def copilot_analysis_by_trade_id(
+    trade_id: str
+):
+
+    record = (
+        get_copilot_analysis_by_trade_id(
+            trade_id
+        )
+    )
+
+    if not record:
+
+        return {
+            "status": "not_found"
+        }
+
+    return {
+
+        "trade_id": record.trade_id,
+
+        "symbol": record.symbol,
+
+        "user_email": record.user_email,
+
+        "actionability": record.actionability,
+
+        "confidence_score": (
+            record.confidence_score
+        ),
+
+        "summary": record.summary,
+
+        "analysis_payload": (
+            record.analysis_payload
+        ),
+
+        "callback_sent": (
+            record.callback_sent
+        ),
+
+        "created_at": (
+            record.created_at
+        )
+    }
+
+@app.get(
+    "/structural/failures/recent"
+)
+def recent_structural_failures(
+    limit: int = 25
+):
+
+    events = (
+        get_recent_structural_failures(
+            limit
+        )
+    )
+
+    return [
+
+        {
+
+            "trade_id": e.trade_id,
+
+            "symbol": e.symbol,
+
+            "failure_pattern": (
+                e.failure_pattern
+            ),
+
+            "severity": e.severity,
+
+            "blocked": e.blocked,
+
+            "reasons": e.reasons,
+
+            "created_at": e.created_at
+        }
+
+        for e in events
+    ]
+
+@app.get(
+    "/structural/failures/{pattern}"
+)
+def structural_failures_by_pattern(
+    pattern: str
+):
+
+    events = (
+        get_failures_by_pattern(
+            pattern
+        )
+    )
+
+    return [
+
+        {
+
+            "trade_id": e.trade_id,
+
+            "symbol": e.symbol,
+
+            "failure_pattern": (
+                e.failure_pattern
+            ),
+
+            "severity": e.severity,
+
+            "blocked": e.blocked,
+
+            "reasons": e.reasons,
+
+            "created_at": e.created_at
+        }
+
+        for e in events
+    ]
+
+@app.get(
+    "/structural/outcomes/recent"
+)
+def recent_structural_outcomes(
+    limit: int = 25
+):
+
+    outcomes = (
+        get_recent_structural_outcomes(
+            limit
+        )
+    )
+
+    return [
+
+        {
+
+            "trade_id": o.trade_id,
+
+            "symbol": o.symbol,
+
+            "failure_pattern": (
+                o.failure_pattern
+            ),
+
+            "blocked": o.blocked,
+
+            "entry_price": (
+                o.entry_price
+            ),
+
+            "evaluation_price": (
+                o.evaluation_price
+            ),
+
+            "pnl_delta_pct": (
+                o.pnl_delta_pct
+            ),
+
+            "outcome": o.outcome,
+
+            "correct_veto": (
+                o.correct_veto
+            ),
+
+            "evaluation_notes": (
+                o.evaluation_notes
+            ),
+
+            "evaluated_at": (
+                o.evaluated_at
+            )
+        }
+
+        for o in outcomes
+    ]
+
+@app.get(
+    "/structural/outcomes/{pattern}"
+)
+def structural_outcomes_by_pattern(
+    pattern: str
+):
+
+    outcomes = (
+        get_structural_outcomes_by_pattern(
+            pattern
+        )
+    )
+
+    return [
+
+        {
+
+            "trade_id": o.trade_id,
+
+            "symbol": o.symbol,
+
+            "failure_pattern": (
+                o.failure_pattern
+            ),
+
+            "blocked": o.blocked,
+
+            "entry_price": (
+                o.entry_price
+            ),
+
+            "evaluation_price": (
+                o.evaluation_price
+            ),
+
+            "pnl_delta_pct": (
+                o.pnl_delta_pct
+            ),
+
+            "outcome": o.outcome,
+
+            "correct_veto": (
+                o.correct_veto
+            ),
+
+            "evaluation_notes": (
+                o.evaluation_notes
+            ),
+
+            "evaluated_at": (
+                o.evaluated_at
+            )
+        }
+
+        for o in outcomes
+    ]
+
+@app.get(
+    "/structural/outcomes/accuracy/{pattern}"
+)
+def structural_pattern_accuracy(
+    pattern: str
+):
+
+    return (
+        get_structural_pattern_accuracy(
+            pattern
+        )
+    )
 
 @app.post("/test-approve/{trade_id}")
 def test_approve(
@@ -219,6 +516,56 @@ def callback_test(
         "payload": payload
     }
 
+@app.post(
+    "/structural/outcomes/evaluate"
+)
+def evaluate_structural_outcome(
+    payload: dict = Body(...)
+):
+
+    evaluation = (
+        save_structural_outcome_evaluation(
+
+            trade_id=payload["trade_id"],
+
+            symbol=payload["symbol"],
+
+            failure_pattern=(
+                payload["failure_pattern"]
+            ),
+
+            blocked=payload["blocked"],
+
+            entry_price=(
+                payload["entry_price"]
+            ),
+
+            evaluation_price=(
+                payload["evaluation_price"]
+            ),
+
+            pnl_delta_pct=(
+                payload["pnl_delta_pct"]
+            ),
+
+            outcome=payload["outcome"],
+
+            correct_veto=(
+                payload["correct_veto"]
+            ),
+
+            evaluation_notes=(
+                payload[
+                    "evaluation_notes"
+                ]
+            )
+        )
+    )
+
+    return {
+        "status": "saved",
+        "evaluation_id": evaluation.id
+    }
 
 @app.post(
     "/events/openclaw/copilot-analysis"
@@ -283,6 +630,27 @@ def copilot_analysis(
             logger.error(
                 f"Callback failure: {str(exc)}"
             )
+
+    save_copilot_analysis(
+
+        trade_id=trade_data["trade_id"],
+
+        user_email=payload.user_email,
+
+        symbol=trade_data["symbol"],
+
+        actionability=analysis["actionability"],
+
+        confidence_score=analysis["confidence_score"],
+
+        summary=analysis["summary"],
+
+        analysis_payload=analysis,
+
+        callback_url=payload.callback_url,
+
+        callback_sent=callback_sent
+    )
 
     return {
         "status": "ready",

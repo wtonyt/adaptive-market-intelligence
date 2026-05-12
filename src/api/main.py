@@ -66,6 +66,9 @@ from src.db.crud_structural_outcome_query import (
 from src.db.crud_structural_outcome import (
     save_structural_outcome_evaluation
 )
+from src.services.copilot_analysis_engine import (
+    post_analysis_callback
+)
 
 app = FastAPI(
     title="Market ML Trading Platform",
@@ -605,31 +608,29 @@ def copilot_analysis(
         )
     )
 
+    analysis["user_email"] = (
+        payload.user_email
+    )
+
+    analysis["trade_id"] = (
+        trade_data["trade_id"]
+    )
+    
     callback_sent = False
 
-    if payload.callback_url:
+    try:
 
-        try:
-
-            requests.post(
-
-                payload.callback_url,
-
-                json={
-                    "status": "completed",
-                    "analysis": analysis
-                },
-
-                timeout=10
+        callback_sent = (
+            post_analysis_callback(
+                analysis
             )
+        )
 
-            callback_sent = True
+    except Exception as exc:
 
-        except Exception as exc:
-
-            logger.error(
-                f"Callback failure: {str(exc)}"
-            )
+        logger.error(
+            f"Callback failure: {str(exc)}"
+        )
 
     save_copilot_analysis(
 

@@ -107,7 +107,13 @@ def post_analysis_callback(analysis: Dict[str, Any]) -> bool:
         headers=headers,
         timeout=float(os.getenv("NODEASSET_COPILOT_CALLBACK_TIMEOUT", "8")),
     )
+    if not response.ok:
+
+        print("CALLBACK STATUS:", response.status_code)
+        print("CALLBACK RESPONSE:", response.text)
+
     response.raise_for_status()
+
     return True
 
 

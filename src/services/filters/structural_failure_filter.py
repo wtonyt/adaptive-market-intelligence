@@ -5,24 +5,24 @@ class StructuralFailureFilter:
         trade_context: dict
     ):
 
-        avg_liq = trade_context.get(
-            "avg_liq",
-            0
+        avg_liq = (
+            trade_context.get("avg_liq")
+            or 0
         )
 
-        min_liq = trade_context.get(
-            "min_liq",
-            0
+        min_liq = (
+            trade_context.get("min_liq")
+            or 0
         )
 
-        avg_bad_p = trade_context.get(
-            "avg_bad_p",
-            0
+        avg_bad_p = (
+            trade_context.get("avg_bad_p")
+            or 0
         )
 
-        float_size = trade_context.get(
-            "float",
-            0
+        float_size = (
+            trade_context.get("float_size")
+            or 0
         )
 
         reasons = []

@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Optional
 
 
 class CoPilotTradeData(
@@ -27,5 +28,7 @@ class CoPilotRequest(
     type: str
 
     user_email: str
+
+    callback_url: Optional[str] = None
 
     data: CoPilotTradeData

@@ -1,33 +1,58 @@
 import os
-from src.db.database import Base, engine
+import requests
+
+from datetime import datetime, timezone
+
 from fastapi import (
+    FastAPI,
+    Body,
     Header,
     HTTPException
+)
+
+from fastapi.responses import JSONResponse
+
+from src.db.database import (
+    Base,
+    engine,
+    SessionLocal
+)
+
+from src.db.models import TradeEvent
+
+from src.config.settings import settings
+
+from src.schemas.copilot_request import (
+    CoPilotRequest
 )
 
 from src.services.copilot.copilot_analysis_service import (
     CoPilotAnalysisService
 )
-from datetime import datetime, timezone
 
-from fastapi import FastAPI, Body
-from fastapi.responses import JSONResponse
-from src.services.trade_events import append_trade_event
-from src.config.settings import settings
-from src.services.poller import poll_once, NodeAssetClient
+from src.services.trade_events import (
+    append_trade_event,
+    update_trade_event_state
+)
+
+from src.services.poller import (
+    poll_once,
+    NodeAssetClient
+)
+
 from src.utils.logger import logger
-from src.db.database import SessionLocal
-from src.db.models import TradeEvent
-from src.services.trade_events import update_trade_event_state
+
 
 app = FastAPI(
     title="Market ML Trading Platform",
     version="1.0.0"
 )
-Base.metadata.create_all(bind=engine)
-from src.schemas.copilot_request import (
-    CoPilotRequest
+
+
+Base.metadata.create_all(
+    bind=engine
 )
+
 
 @app.get("/")
 def health_check():
@@ -89,7 +114,8 @@ def poll_feed():
                 "message": str(exc)
             }
         )
-    
+
+
 @app.post("/test-event")
 def test_event(
     payload: dict = Body(...)
@@ -104,6 +130,7 @@ def test_event(
         "status": "ingested",
         "event": event
     }
+
 
 @app.get("/metrics")
 def metrics():
@@ -154,8 +181,11 @@ def metrics():
 
         db.close()
 
+
 @app.post("/test-approve/{trade_id}")
-def test_approve(trade_id: str):
+def test_approve(
+    trade_id: str
+):
 
     event = update_trade_event_state(
         trade_id=trade_id,
@@ -173,6 +203,22 @@ def test_approve(trade_id: str):
         "status": "approved",
         "trade_id": trade_id
     }
+
+
+@app.post("/callback-test")
+def callback_test(
+    payload: dict = Body(...)
+):
+
+    logger.info(
+        f"Callback received: {payload}"
+    )
+
+    return {
+        "status": "callback_received",
+        "payload": payload
+    }
+
 
 @app.post(
     "/events/openclaw/copilot-analysis"
@@ -212,13 +258,35 @@ def copilot_analysis(
         )
     )
 
+    callback_sent = False
+
+    if payload.callback_url:
+
+        try:
+
+            requests.post(
+
+                payload.callback_url,
+
+                json={
+                    "status": "completed",
+                    "analysis": analysis
+                },
+
+                timeout=10
+            )
+
+            callback_sent = True
+
+        except Exception as exc:
+
+            logger.error(
+                f"Callback failure: {str(exc)}"
+            )
+
     return {
-
         "status": "ready",
-
         "mode": "openclaw-copilot",
-
-        "callback_sent": False,
-
+        "callback_sent": callback_sent,
         "analysis": analysis
     }

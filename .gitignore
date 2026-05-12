@@ -11,6 +11,7 @@ __pycache__/
 *.tfvars
 *.tfvars.json
 crash.log
+infra/envs/*/terraform.tfvars
 
 # Terraform lock files
 # Keep env-level lock files only if desired

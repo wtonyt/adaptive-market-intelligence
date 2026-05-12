@@ -37,6 +37,28 @@ NodeAsset Terminal
   CoPilot screen + trade-specific chat
 ```
 
+## Structural Intelligence Layer
+
+CoPilot now includes a structural reasoning layer that evaluates trade quality beyond directional bullish/bearish classification.
+
+The structural layer attempts to identify failure signatures commonly associated with low-quality momentum setups, liquidity traps, weak execution conditions, or unstable market structure.
+
+Examples include:
+
+- liquidity dumping risk,
+- unstable low-float behavior,
+- elevated historical failure probability,
+- weak bid support,
+- late momentum extension patterns.
+
+Structural reasoning can override otherwise bullish setups and classify them as:
+
+- `avoid`
+- `high risk`
+- `watch`
+
+This layer is intended to reduce exposure to structurally weak trades even when higher-level sentiment or narrative signals appear favorable.
+
 ## Required Services
 
 To enable CoPilot for a tenant or customer account, run these services:
@@ -165,6 +187,13 @@ Example response:
 }
 ```
 
+### Structural Telemetry APIs
+
+Recent structural vetoes:
+
+```text
+GET /structural/failures/recent
+
 ### Answer A Follow-Up Question
 
 NodeAsset API can call:
@@ -180,6 +209,39 @@ The request includes the saved analysis and the trader's question. The response 
   "reply": "The setup is still a watch, but it needs fresh price and volume context before a trader treats it as actionable."
 }
 ```
+Structural failures by pattern:
+GET /structural/failures/{pattern}
+
+Recent outcome evaluations:
+GET /structural/outcomes/recent
+
+Outcome evaluations by pattern:
+GET /structural/outcomes/{pattern}
+
+Pattern accuracy metrics:
+GET /structural/outcomes/accuracy/{pattern}
+
+These APIs provide introspection into CoPilot's protective reasoning behavior and historical veto effectiveness.
+
+
+---
+
+# 4. Operational Positioning Update
+
+Near the bottom under:
+```text
+## Positioning
+
+CoPilot is evolving toward an adaptive reasoning system that combines:
+
+- narrative intelligence,
+- structural market analysis,
+- protective trade filtration,
+- telemetry persistence,
+- historical outcome attribution,
+- future calibration infrastructure.
+
+The current operational mode is supervised intelligence evaluation rather than fully autonomous execution.
 
 ## What Gets Persisted
 
@@ -196,6 +258,26 @@ This service also stores local reasoning records in PostgreSQL:
 - `agent_performance`
 
 NodeAsset API is the source used by Terminal. The local PostgreSQL data is useful for worker diagnostics, replay, and later model analysis.
+
+### Structural Telemetry + Outcome Attribution
+
+CoPilot now persists structural reasoning telemetry and later outcome evaluations in PostgreSQL.
+
+Additional tables include:
+
+- `structural_failure_events`
+- `structural_outcome_evaluations`
+
+These records support:
+
+- structural veto analysis,
+- historical failure pattern tracking,
+- future reinforcement learning,
+- false positive analysis,
+- filter accuracy measurement,
+- adaptive threshold refinement.
+
+The platform can now measure whether structural vetoes later proved correct based on future market outcomes.
 
 ## Local Run
 
@@ -272,3 +354,5 @@ It should not be marketed as autonomous execution unless a customer explicitly a
 ## Future Rename
 
 This repo can be renamed from `market-ml-databricks` to `nodeasset-copilot`. The expected product name in documentation and customer setup is already **NodeAsset CoPilot**.
+
+

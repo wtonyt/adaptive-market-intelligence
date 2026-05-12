@@ -1,1 +1,0 @@
-polygon_api_key = "Es4hJ3Zc5xlypylcrAH5HDAJVEmwulyG"

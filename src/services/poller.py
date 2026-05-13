@@ -217,8 +217,16 @@ def poll_once(
 
     payload = client.subscribed_trades(cursor)
 
+    logger.info(
+        f"Raw NodeAsset payload: {payload}"
+    )
+
     trades: List[Dict[str, Any]] = (
         payload.get("trades") or []
+    )
+
+    logger.info(
+        f"Retrieved {len(trades)} raw trades from feed"
     )
 
     processed = [

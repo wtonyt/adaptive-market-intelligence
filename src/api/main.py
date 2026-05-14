@@ -2,13 +2,7 @@ import os
 import requests
 
 from datetime import datetime, timezone
-from threading import Thread
 
-from src.services.poller import (
-    poll,
-    poll_once,
-    NodeAssetClient
-)
 from fastapi import (
     FastAPI,
     Body,
@@ -86,17 +80,17 @@ Base.metadata.create_all(
     bind=engine
 )
 
-@app.on_event("startup")
-async def startup_event():
+# @app.on_event("startup")
+# async def startup_event():
 
-    logger.info(
-        "Starting NodeAsset background poller..."
-    )
+#     logger.info(
+#         "Starting NodeAsset background poller..."
+#     )
 
-    Thread(
-        target=poll,
-        daemon=True
-    ).start()
+#     Thread(
+#         target=poll,
+#         daemon=True
+#     ).start()
 
 @app.get("/")
 def health_check():

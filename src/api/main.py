@@ -619,6 +619,14 @@ def copilot_analysis(
         )
     )
 
+    logger.info(
+        f"OpenClaw analysis generated | "
+        f"trade_id={trade_data['trade_id']} | "
+        f"symbol={trade_data['symbol']} | "
+        f"actionability={analysis['actionability']} | "
+        f"confidence_score={analysis['confidence_score']}"
+    )
+
     analysis["user_email"] = (
         payload.user_email
     )
@@ -635,6 +643,12 @@ def copilot_analysis(
             post_analysis_callback(
                 analysis
             )
+        )
+
+        logger.info(
+            f"OpenClaw callback completed | "
+            f"trade_id={trade_data['trade_id']} | "
+            f"callback_sent={callback_sent}"
         )
 
     except Exception as exc:
@@ -670,3 +684,4 @@ def copilot_analysis(
         "callback_sent": callback_sent,
         "analysis": analysis
     }
+

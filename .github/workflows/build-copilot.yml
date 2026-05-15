@@ -1,0 +1,128 @@
+name: Build and Deploy CoPilot Service
+
+env:
+  IMAGE_TAG: ${{ github.sha }}
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+concurrency:
+  group: copilot-build
+  cancel-in-progress: true
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          set -e
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Initialize test database
+        env:
+          TEST_MODE: "true"
+          ALPACA_API_KEY: "test"
+          ALPACA_SECRET_KEY: "test"
+          OPENAI_API_KEY: "test"
+        run: |
+          set -e
+          source .venv/bin/activate
+          python -m src.db.init_db
+
+      - name: Start API
+        env:
+          TEST_MODE: "true"
+          ALPACA_API_KEY: "test"
+          ALPACA_SECRET_KEY: "test"
+          OPENAI_API_KEY: "test"
+          EVENT_INGEST_TOKEN: "local-openclaw-token"
+        run: |
+          set -e
+          source .venv/bin/activate
+          uvicorn src.api.main:app \
+            --host 127.0.0.1 \
+            --port 8000 \
+            > api.log 2>&1 &
+          sleep 5
+          cat api.log
+
+      - name: Wait for API
+        run: |
+          set -e
+          for i in {1..10}; do
+            if curl -f http://127.0.0.1:8000/; then
+              exit 0
+            fi
+            echo "Waiting for API..."
+            sleep 2
+          done
+          echo "API failed to start"
+          cat api.log
+          exit 1
+
+      - name: Run tests
+        env:
+          TEST_MODE: "true"
+          ALPACA_API_KEY: "test"
+          ALPACA_SECRET_KEY: "test"
+          OPENAI_API_KEY: "test"
+          EVENT_INGEST_TOKEN: "local-openclaw-token"
+        run: |
+          set -e
+          source .venv/bin/activate
+          pytest -vv -s --maxfail=1
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Log in to ACR
+        run: |
+          set -e
+          az acr login --name marketmlacr123
+
+      - name: Build Docker image
+        run: |
+          set -e
+          docker build \
+            -t marketmlacr123.azurecr.io/market-ml-copilot:${{ env.IMAGE_TAG }} \
+            -f docker/Dockerfile.api .
+
+      - name: Push Docker image
+        run: |
+          set -e
+          docker push marketmlacr123.azurecr.io/market-ml-copilot:${{ env.IMAGE_TAG }}
+
+      - name: Deploy CoPilot Container App
+        run: |
+          set -e
+          az containerapp update \
+            --name market-ml-copilot \
+            --resource-group market-ml-rg \
+            --image marketmlacr123.azurecr.io/market-ml-copilot:${{ env.IMAGE_TAG }}
+
+      - name: Verify Deployment
+        run: |
+          set -e
+          az containerapp revision list \
+            --name market-ml-copilot \
+            --resource-group market-ml-rg \
+            --output table

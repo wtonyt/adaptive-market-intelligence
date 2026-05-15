@@ -639,6 +639,15 @@ def copilot_analysis(
 
     try:
 
+        import json
+
+        logger.info(
+            "Callback payload being sent:\n"
+            + json.dumps(
+                analysis,
+                indent=2
+            )
+        )
         callback_sent = (
             post_analysis_callback(
                 analysis
